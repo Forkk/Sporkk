@@ -1,0 +1,23 @@
+# Erlang
+.eunit
+deps
+*.o
+*.beam
+*.plt
+erl_crash.dump
+
+# Vim
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+
+# Sublime Text 2
+*.sublime-workspace
+*.sublime-project
+
+# Misc Crap
+*~
+
