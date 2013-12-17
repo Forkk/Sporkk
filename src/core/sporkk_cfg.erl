@@ -10,7 +10,7 @@
 
 % API Functions
 -export([init/0]).
--export([add_bot/4, remove_bot/1, get_bots/0]).
+-export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1]).
 -export([add_network/2, remove_network/1, get_network/1]).
 
 % Records
@@ -72,6 +72,12 @@ get_bots() ->
 	{atomic, BotConfs} = mnesia:transaction(fun() -> qlc:e(Query) end),
 	Bots = lists:map(fun(C) -> bot_from_config(C) end, BotConfs),
 	{ok, Bots}.
+
+%% @doc Gets the bot with the given ID.
+get_bot(Id) ->
+	Query = qlc:q([C || C <- mnesia:table(bot_config), C#bot_config.id =:= Id]),
+	{atomic, [BotConf|_]} = mnesia:transaction(fun() -> qlc:e(Query) end),
+	{ok, bot_from_config(BotConf)}.
 
 
 %%%%%% Networks %%%%%%

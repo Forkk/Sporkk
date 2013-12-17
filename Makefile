@@ -23,5 +23,5 @@ relclean:
 	rm -rf rel/erb.SUFFIXES: .erl .beam .yrl
 
 run-shell:
-	@erl -sname sporkk -pa ebin
+	@erl -sname sporkk -pa ebin -I include
 

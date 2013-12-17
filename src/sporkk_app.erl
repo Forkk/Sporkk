@@ -8,13 +8,7 @@
 -author("Forkk").
 -behavior(application).
 
--export([start/0, start/2, stop/1]).
-
-start() ->
-	ok = application:start(inets),
-	ok = application:start(sasl),
-	ok = application:start(mnesia),
-	ok = application:start(sporkk).
+-export([start/2, stop/1]).
 
 %% Starts the application's core supervisor.
 start(_Type, _Args) ->

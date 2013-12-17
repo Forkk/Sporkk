@@ -11,14 +11,15 @@
 -include("sporkk.hrl").
 
 %% API Functions
--export([start_link/2]).
+-export([start_link/1]).
 
 %% gen_fsm callbacks
 -export([init/1, connecting/2, registering/2, running/2, handle_event/3, handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
 % State record
 -record(state, {
-		  bot,
+		  botid,
+		  nick,
 		  account_map
 		 }).
 
@@ -28,10 +29,10 @@
 %% ============================================================================
 
 %% ----------------------------------------------------------------------------
-%% @doc Starts the core.
+%% @doc Starts the receiver.
 %% ----------------------------------------------------------------------------
-start_link(Bot, Id) ->
-	gen_fsm:start_link(Id, ?MODULE, [Bot], []).
+start_link(BotId) ->
+	gen_fsm:start_link(sporkk:receiver(BotId), ?MODULE, [BotId], []).
 
 %% ============================================================================
 %% Callbacks
@@ -40,8 +41,9 @@ start_link(Bot, Id) ->
 %% ----------------------------------------------------------------------------
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
-init([Bot]) ->
-	{ok, connecting, #state{bot=Bot, account_map=ets:new(receiver_account_map, [private])}}.
+init([BotId]) ->
+	{ok, Bot} = sporkk_cfg:get_bot(BotId),
+	{ok, connecting, #state{botid=BotId, nick=Bot#bot.nick, account_map=ets:new(receiver_account_map, [private])}}.
 
 
 %% ----------------------------------------------------------------------------
@@ -50,8 +52,9 @@ init([Bot]) ->
 %% ----------------------------------------------------------------------------
 connecting(connected, State) ->
 	error_logger:info_msg("TCP connection success. Registering with the IRC server."),
-	Bot = State#state.bot,
-	ok = gen_server:cast(Bot#bot.sender, {register, Bot#bot.nick}),
+	BotId = State#state.botid,
+	{ok, Bot} = sporkk_cfg:get_bot(BotId),
+	ok = gen_server:cast(sporkk:sender(BotId), {register, Bot#bot.nick}),
 	{next_state, registering, State};
 connecting(_Request, State) ->
 	{next_state, connecting, State}.
@@ -60,24 +63,25 @@ connecting(_Request, State) ->
 %% @doc Registering state, in which the core logs in to the IRC server.
 %% ----------------------------------------------------------------------------
 registering({recv, {DateTime, LineData}}, State) ->
-	Bot = State#state.bot,
-	{ok, Line} = parse_line(State#state.bot, DateTime, LineData),
+	BotId = State#state.botid,
+	{ok, Bot} = sporkk_cfg:get_bot(BotId),
+	{ok, Line} = parse_line(Bot, DateTime, LineData),
 	case Line#line.operation of
 		ping ->
-			ok = gen_server:cast(Bot#bot.sender, {pong, Line#line.body}),
+			ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
 			{next_state, registering, State};
 		err_nicknameinuse ->
-			% TODO: Maybe implement a better way to do this.
+			% TODO: Get the nick from the database, not the local state. This may cause issues.
 			error_logger:info_msg("Nick in use. Trying another one."),
 			NewNick = Bot#bot.nick ++ "_",
-			NewBot = Bot#bot{nick=NewNick},
-			ok = gen_server:cast(Bot#bot.sender, {nick, NewNick}),
-			{next_state, registering, State#state{bot=NewBot}};
+			ok = gen_server:cast(sporkk:sender(BotId), {nick, NewNick}),
+			{next_state, registering, State#state{nick=NewNick}};
 		rpl_welcome ->
 			error_logger:info_msg("Connected to IRC. Joining channels."),
 			Channels = Bot#bot.channels,
-			ok = gen_server:cast(Bot#bot.sender, {join, Channels}),
-			ok = gen_server:cast(Bot#bot.router, {line, Line}),
+			ok = gen_server:cast(sporkk:sender(BotId), {join, Channels}),
+			% TODO: Send Lines to the event manager.
+			%ok = gen_server:cast(, {line, Line}),
 			{next_state, running, State};
 		_ ->
 			{next_state, registering, State}
@@ -87,20 +91,20 @@ registering({recv, {DateTime, LineData}}, State) ->
 %% @doc Running state, in which the core handles messages from the IRC server.
 %% ----------------------------------------------------------------------------
 running({recv, {DateTime, LineData}}, State) ->
-	Bot = State#state.bot,
-	{ok, Line} = parse_line(State#state.bot, DateTime, LineData),
+	BotId = State#state.botid,
+	{ok, Bot} = sporkk_cfg:get_bot(BotId),
+	{ok, Line} = parse_line(Bot, DateTime, LineData),
 	Result = case Line#line.operation of
 				 ping ->
-					 ok = gen_server:cast(Bot#bot.sender, {pong, Line#line.body}),
+					 ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
 					 {next_state, running, State};
 				 nickchanged ->
-					 NewBotState = Bot#bot{nick=Line#line.body},
-					 {next_state, running, State#state{bot=NewBotState}};
+					 {next_state, running, State#state{nick=Line#line.body}};
 
 				 join ->
 					 case string:tokens(Line#line.origin, "!@") of
 						 [Nick, _User, _Host] ->
-							 gen_server:cast(Bot#bot.sender, {whois, Nick});
+							 gen_server:cast(sporkk:sender(BotId), {whois, Nick});
 						 _ ->
 							 pass
 					 end,
@@ -121,6 +125,8 @@ running({recv, {DateTime, LineData}}, State) ->
 				 _ ->
 					 {next_state, running, State}
 			 end,
+	
+	% Fill out the account field on the line data.
 	NewLineData = case Line#line.origin of
 					  undefined ->
 						  Line;
@@ -137,7 +143,10 @@ running({recv, {DateTime, LineData}}, State) ->
 								  Line
 						  end
 				  end,
-	gen_server:cast(Bot#bot.router, {line, NewLineData}),
+
+	% TODO: Send events to the event manager.
+	%gen_server:cast(, {line, NewLineData}),
+
 	Result.
 
 % Ignore these.

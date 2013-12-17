@@ -9,7 +9,7 @@
 -author("Forkk").
 
 -export([operation_to_atom/1]).
--export([pong/1, register/1, register/4, join/1, privmsg/2, kick/2, kick/3, mode/2, quiet/2, ban/2, whois/1]).
+-export([pong/1, nick/1, register/4, join/1, privmsg/2, kick/2, kick/3, mode/2, quiet/2, ban/2, whois/1]).
 
 %% -------------------------------------------------------------------
 %% @spec operation_to_atom() -> atom
@@ -73,10 +73,15 @@ pong(Server) ->
 
 %% -------------------------------------------------------------------
 %% @spec nick() -> string
+%% @doc Change nick.
+%% -------------------------------------------------------------------
+nick(Nick) ->
+	"NICK " ++ Nick.
+
+%% -------------------------------------------------------------------
+%% @spec register() -> string
 %% @doc Register with the server
 %% -------------------------------------------------------------------
-register(Nick) ->
-	"NICK " ++ Nick.
 register(User, Host, Server, RealName) ->
 	"USER " ++ User ++ " " ++ Host ++ " " ++ Server ++ " :" ++ RealName.
 

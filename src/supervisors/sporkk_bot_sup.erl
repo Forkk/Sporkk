@@ -38,18 +38,13 @@ start_link(Bot) ->
 %%                     {error, Reason}
 %% @doc Returns information about the supervisor.
 %% ----------------------------------------------------------------------------
-init([BotSpec]) ->
-	ConnectorId = {global, sporkk_connector},
-	SenderId = {global, sporkk_sender},
-	RouterId = {global, sporkk_router},
-	ReceiverId = {global, sporkk_receiver},
-	Bot = BotSpec#bot{sender=SenderId, router=RouterId},
+init([Bot]) ->
 	{ok,
-	 {{one_for_all, 5, 60},
+	 {{one_for_one, 5, 60},
 	  [
 	   % The sender process. This is responsible for sending messages to the IRC server.
 	   {sporkk_sender,
-		{sporkk_sender, start_link, [Bot, ConnectorId]},
+		{sporkk_sender, start_link, [Bot#bot.id]},
 		permanent,
 		2000,
 		worker,
@@ -57,7 +52,7 @@ init([BotSpec]) ->
 	   },
 	   % The receiver process. This processes data from the connector into line records and hands them to the router.
 	   {sporkk_receiver,
-		{sporkk_receiver, start_link, [Bot, ReceiverId]},
+		{sporkk_receiver, start_link, [Bot#bot.id]},
 		permanent,
 		2000,
 		worker,
@@ -65,19 +60,24 @@ init([BotSpec]) ->
 	   },
 	   % The connector process. This manages the bot's connection to the IRC server.
 	   {sporkk_connector,
-		{sporkk_connector, start_link, [Bot, ConnectorId, ReceiverId]},
+		{sporkk_connector, start_link, [Bot#bot.id]},
 		permanent,
 		2000,
 		worker,
 		[sporkk_connector]
+	   },
+	   % The event manager.
+	   {sporkk_eventmgr,
+		{gen_event, start_link, [sporkk:eventmgr(Bot#bot.id)]},
+		permanent,
+		2000,
+		worker,
+		[gen_event]
 	   }
-%	   % The event manager.
-%	   {event_mgr,
-%		{gen_event, start_link, []},
-%		permanent,
-%		2000,
-%		worker,
-%		[gen_event]
-%	   }
 	  ]}}.
+
+
+%% ============================================================================
+%% Internal Functions
+%% ============================================================================
 

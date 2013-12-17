@@ -8,13 +8,13 @@
 -include("sporkk.hrl").
 
 %% API Functions
--export([start_link/3]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 % State record
--record(state, {bot, sock, receiver}).
+-record(state, {botid, sock}).
 
 
 %% ============================================================================
@@ -24,8 +24,8 @@
 %% ----------------------------------------------------------------------------
 %% @doc Starts the bot manager.
 %% ----------------------------------------------------------------------------
-start_link(Bot, Id, ReceiverId) ->
-	gen_server:start_link(Id, ?MODULE, [Bot, ReceiverId], []).
+start_link(BotId) ->
+	gen_server:start_link(sporkk:connector(BotId), ?MODULE, [BotId], []).
 
 %% ============================================================================
 %% Callbacks
@@ -34,13 +34,14 @@ start_link(Bot, Id, ReceiverId) ->
 %% ----------------------------------------------------------------------------
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
-init([Bot, ReceiverId]) ->
+init([BotId]) ->
+	{ok, Bot} = sporkk_cfg:get_bot(BotId),
 	{ok, Network} = sporkk_cfg:get_network(Bot#bot.network),
 	error_logger:info_msg("Connecting to IRC network."),
 	{ok, Sock} = network_connect(Network),
 	% Notify the receiver that we've connected.
-	gen_fsm:send_event(ReceiverId, connected),
-	{ok, #state{bot=Bot, sock=Sock, receiver=ReceiverId}}.
+	gen_fsm:send_event(sporkk:receiver(BotId), connected),
+	{ok, #state{botid=BotId, sock=Sock}}.
 
 %% ----------------------------------------------------------------------------
 %% @spec handle_call(Request, From, State) -> {reply, Reply, State}          |
@@ -75,7 +76,7 @@ handle_cast(_Request, State) ->
 %% @doc Handles TCP messages, parsing them into lines and dispatching the lines to the core for processing.
 handle_info({tcp, Sock, Data}, State) ->
 	Lines = string:tokens(Data, "\r\n"),
-	dispatch(State#state.receiver, Lines),
+	dispatch(sporkk:receiver(State#state.botid), Lines),
 	{noreply, State#state{sock=Sock}};
 
 handle_info({tcp_closed, _Sock}, State) ->

@@ -9,9 +9,7 @@
 -record(bot, {id,
 			  network,
 			  nick,
-			  channels,
-			  sender=undefined,
-			  router=undefined
+			  channels
 			 }).
 
 %% @doc Record representing a line from the IRC server.

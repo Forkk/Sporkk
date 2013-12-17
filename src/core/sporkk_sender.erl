@@ -8,13 +8,13 @@
 -include("sporkk.hrl").
 
 %% API Functions
--export([start_link/2]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 % State record
--record(state, {connector}).
+-record(state, {botid}).
 
 
 %% ============================================================================
@@ -24,8 +24,8 @@
 %% ----------------------------------------------------------------------------
 %% @doc Starts the bot manager.
 %% ----------------------------------------------------------------------------
-start_link(Bot, ConnectorId) ->
-	gen_server:start_link(Bot#bot.sender, ?MODULE, [ConnectorId], []).
+start_link(BotId) ->
+	gen_server:start_link(sporkk:sender(BotId), ?MODULE, [BotId], []).
 
 %% ============================================================================
 %% Callbacks
@@ -34,8 +34,8 @@ start_link(Bot, ConnectorId) ->
 %% ----------------------------------------------------------------------------
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
-init([ConnectorId]) ->
-	{ok, #state{connector=ConnectorId}}.
+init([BotId]) ->
+	{ok, #state{botid=BotId}}.
 
 %% ----------------------------------------------------------------------------
 %% @spec handle_call(Request, From, State) -> {reply, Reply, State}          |
@@ -56,34 +56,34 @@ handle_call(_Request, _From, State) ->
 %% @doc Handles cast messages.
 %% ----------------------------------------------------------------------------
 handle_cast({pong, Server}, State) ->
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:pong(Server)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:pong(Server)}),
 	{noreply, State};
 
 handle_cast({register, Nick}, State) ->
 	error_logger:info_msg("Registering with server as ~s~n", [Nick]),
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:register(Nick)}),
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:register(Nick, "localhost", "localhost", "Sporkk")}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:nick(Nick)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:register(Nick, "localhost", "localhost", "Sporkk [https://github.com/Forkk/Sporkk]")}),
 	{noreply, State};
 
 handle_cast({nick, Nick}, State) ->
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:register(Nick)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:register(Nick)}),
 	{noreply, State};
 
 handle_cast({whois, Nick}, State) ->
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:whois(Nick)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:whois(Nick)}),
 	{noreply, State};
 
 handle_cast({privmsg, Dest, Message}, State) ->
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:privmsg(Dest, Message)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:privmsg(Dest, Message)}),
 	{noreply, State};
 
 handle_cast({kick, Dest, Nick, Reason}, State) ->
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:kick(Dest, Nick, Reason)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:kick(Dest, Nick, Reason)}),
 	{noreply, State};
 
 handle_cast({join, Channels}, State) ->
 	error_logger:info_msg("Joining channels ~s~n", [string:join(Channels, ", ")]),
-	ok = gen_server:cast(State#state.connector, {send_line, irc_lib:join(Channels)}),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:join(Channels)}),
 	{noreply, State};
 
 % Ignore things that don't speak the same language. Mainly because I'm American.
