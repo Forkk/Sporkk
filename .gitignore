@@ -5,6 +5,8 @@ deps
 *.beam
 *.plt
 erl_crash.dump
+ebin/
+Mnesia.*
 
 # Vim
 [._]*.s[a-w][a-z]

@@ -1,0 +1,12 @@
+{application, sporkk, [
+	{description, "Sporkk IRC Bot"},
+	{vsn, "0.0.1"},
+	{applications, [
+		kernel,
+		stdlib,
+		sasl,
+		inets
+	]},
+	{mod, {sporkk_app, []}}
+]}.
+
