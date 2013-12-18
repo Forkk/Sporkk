@@ -11,7 +11,7 @@
 
 -export([parse_message/3]).
 -export([command_to_atom/1]).
--export([pong/1, nick/1, register/4, join/1, part/1, part/2, privmsg/2, kick/2, kick/3, mode/2, quiet/2, ban/2, whois/1]).
+-export([pong/1, nick/1, register/4, join/1, part/1, part/2, notice/2, privmsg/2, kick/2, kick/3, mode/2, quiet/2, ban/2, whois/1]).
 
 %% -------------------------------------------------------------------
 %% @spec command_to_atom() -> atom
@@ -111,6 +111,13 @@ part(Channels, Reason) ->
 %% -------------------------------------------------------------------
 privmsg(Dest, Msg) ->
 	"PRIVMSG " ++ Dest ++ " :" ++ Msg.
+
+%% -------------------------------------------------------------------
+%% @spec notice(Dest, Msg) -> string
+%% @doc Send Msg to Dest(ination) via NOTICE
+%% -------------------------------------------------------------------
+notice(Dest, Msg) ->
+	"NOTICE " ++ Dest ++ " :" ++ Msg.
 
 %% -------------------------------------------------------------------
 %% @spec kick(Chan, Nick | Chan, Nick, Reason) -> string

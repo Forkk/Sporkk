@@ -40,7 +40,7 @@ start_link(Bot) ->
 %% ----------------------------------------------------------------------------
 init([Bot]) ->
 	{ok,
-	 {{one_for_one, 5, 60},
+	 {{one_for_all, 5, 60},
 	  [
 	   % The sender process. This is responsible for sending messages to the IRC server.
 	   {sporkk_sender,

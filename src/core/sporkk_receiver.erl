@@ -129,7 +129,7 @@ running({recv, {DateTime, LineData}}, State) ->
 			end,
 			{next_state, running, State};
 		reply_whoisaccount ->
-			[Nick, Account] = Line#line.args,
+			[Nick, Account | _] = Line#line.args,
 			true = ets:insert(State#state.account_map, {Nick, Account}),
 			{next_state, running, State};
 		part ->

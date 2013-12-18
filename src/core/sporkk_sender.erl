@@ -77,6 +77,10 @@ handle_cast({privmsg, Dest, Message}, State) ->
 	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:privmsg(Dest, Message)}),
 	{noreply, State};
 
+handle_cast({notice, Dest, Message}, State) ->
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:notice(Dest, Message)}),
+	{noreply, State};
+
 handle_cast({kick, Dest, Nick, Reason}, State) ->
 	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:kick(Dest, Nick, Reason)}),
 	{noreply, State};

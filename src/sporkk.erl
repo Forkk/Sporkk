@@ -62,7 +62,7 @@ part(Id, Channels) ->
 
 %% @doc Tells the bot with the given ID to send the given message to the given destination.
 send(Id, Dest, Message) ->
-	gen_server:cast(sender(Id), {privmsg, Dest, Message}).
+	gen_server:cast(sender(Id), {notice, Dest, Message}).
 
 
 %% ============================================================================
