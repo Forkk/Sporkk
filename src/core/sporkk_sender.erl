@@ -86,6 +86,11 @@ handle_cast({join, Channels}, State) ->
 	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:join(Channels)}),
 	{noreply, State};
 
+handle_cast({part, Channels, Reason}, State) ->
+	error_logger:info_msg("Parting from channels ~s~n", [string:join(Channels, ", ")]),
+	ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:part(Channels, Reason)}),
+	{noreply, State};
+
 % Ignore things that don't speak the same language. Mainly because I'm American.
 handle_cast(_Request, State) ->
 	{noreply, State}.

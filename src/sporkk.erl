@@ -10,7 +10,7 @@
 
 -export([start/1, stop/1]).
 
--export([join/2, part/2]).
+-export([join/2, part/2, part/3]).
 
 -export([say/3]).
 
@@ -50,12 +50,14 @@ stop(Id) ->
 
 
 %% @doc Tells the bot with the given ID to join the given channel.
-join(Id, Channel) ->
-	gen_server:cast(sender(Id), {join, [Channel]}).
+join(Id, Channels) ->
+	gen_server:cast(sender(Id), {join, Channels}).
 
 %% @doc Tells the bot with the given ID to part from the given channel.
-part(Id, Channel) ->
-	gen_server:cast(sender(Id), {part, [Channel], "I was told to leave."}).
+part(Id, Channels, Reason) ->
+	gen_server:cast(sender(Id), {part, Channels, Reason}).
+part(Id, Channels) ->
+	part(Id, Channels, "I was told to leave.").
 
 
 %% @doc Tells the bot with the given ID to send the given message to the given destination.

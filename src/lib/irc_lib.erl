@@ -9,7 +9,7 @@
 -author("Forkk").
 
 -export([operation_to_atom/1]).
--export([pong/1, nick/1, register/4, join/1, privmsg/2, kick/2, kick/3, mode/2, quiet/2, ban/2, whois/1]).
+-export([pong/1, nick/1, register/4, join/1, part/1, part/2, privmsg/2, kick/2, kick/3, mode/2, quiet/2, ban/2, whois/1]).
 
 %% -------------------------------------------------------------------
 %% @spec operation_to_atom() -> atom
@@ -51,7 +51,7 @@ operation_to_atom("210") ->
 operation_to_atom("211") ->
 	rpl_tracestatslinkinfo;
 operation_to_atom("330") ->
-        rpl_whoisaccount;
+	    rpl_whoisaccount;
 operation_to_atom("433") ->
 	err_nicknameinuse;
 
@@ -90,11 +90,16 @@ register(User, Host, Server, RealName) ->
 %% @doc Join the channel(s)
 %% -------------------------------------------------------------------
 join(Channels) ->
-    join([], Channels).
-join(Result, []) ->
-    string:join(Result, "\r\n");
-join(Result, [Channel|Channels]) ->
-    join(lists:append(Result, ["JOIN " ++ Channel]), Channels).
+	"JOIN " ++ string:join(Channels, ",").
+
+%% -------------------------------------------------------------------
+%% @spec part(Result, Channels) -> string
+%% @doc Part the channel(s)
+%% -------------------------------------------------------------------
+part(Channels) ->
+	part(Channels, "Leaving").
+part(Channels, Reason) ->
+	"PART " ++ string:join(Channels, ",") ++ " :" ++ Reason.
 
 %% -------------------------------------------------------------------
 %% @spec privmsg(Dest, Msg) -> string
@@ -138,5 +143,5 @@ ban(Chan, Mask) ->
 %% @doc Lookup user info from the server
 %% -------------------------------------------------------------------
 whois(Nick) ->
-    "WHOIS " ++ Nick.
+	"WHOIS " ++ Nick.
 
