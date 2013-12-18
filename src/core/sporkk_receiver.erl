@@ -142,18 +142,25 @@ running({recv, {DateTime, LineData}}, State) ->
 			{next_state, running, State};
 
 		privmsg ->
-			% TODO: Parse the message to see if it's a command.
-			% Determine where the message was sent to (was it a channel message or a PM?)
-			Source = case Line#line.destination of
-						 [$#|_Channel] ->
-							 {chan, Line#line.destination};
-						 _ ->
-							 % TODO: Recognize PMs.
-							 undefined
-					 end,
+			Source = Line#line.destination,
 			
 			% Send the message to the module server for processing.
-			gen_server:cast(sporkk:modserv(BotId), {event, {message, {Source, Line#line.user, Line#line.body}}}),
+			gen_server:cast(sporkk:modserv(BotId), {event, message, {Source, Line#line.user, Line#line.body}}),
+
+			% Figure out if it's a command.
+			Body = Line#line.body,
+			% TODO: Allow changing the command prefix.
+			% TODO: Allow using the bot's nick as a command prefix.
+			PfxPos = string:chr(Body, $.),
+			if
+				PfxPos =:= 1, length(Body) > 1 ->
+					CmdMsg = string:right(Body, length(Body)-1),
+					% Don't bother parsing the command. We'll let the module server handle that.
+					gen_server:cast(sporkk:modserv(BotId), {command, Source, Line#line.user, CmdMsg});
+
+				true ->
+					pass
+			end,
 
 			% Continue running.
 			{next_state, running, State};

@@ -55,7 +55,7 @@ behaviour_info(callbacks) ->
 	 %
 	 {handle_event, 4},
 
-	 % handle_command(CommandId, Source, User, Args, State) -> {ok, NewState}
+	 % handle_command(CommandId, Source, User, Args, State, BotId) -> {ok, NewState}
 	 % 	Types:
 	 % 		CommandId = atom() - An atom identifying the command. This will be the atom ID that the command was registered with.
 	 % 		Source = string() - A string specifying either the channel the message was from or the sender's nick in the case of a PM.
@@ -63,8 +63,9 @@ behaviour_info(callbacks) ->
 	 % 		User = {Nick, Account} - A tuple of the nick and account (if applicable) of the user who sent the command.
 	 % 		Args = [string()] - A list of strings representing the command's arguments.
 	 % 		State = term() - The module's state.
+	 % 		BotId = atom() - The module's bot's ID.
 	 %
-	 {handle_command, 5},
+	 {handle_command, 6},
 
 	 % code_change(OldVsn, State, Extra) -> {ok, NewState}
 	 % Called when this module's code changes. See OTP gen_event documentation for more info.
@@ -99,8 +100,11 @@ init([BotId, Module]) ->
 	end.
 
 %% @doc Handles a cast from the module server.
-handle_cast({event, {EventType, EventData}}, State) ->
+handle_cast({event, EventType, EventData}, State) ->
 	{ok, NewModState} = (State#state.module):handle_event(EventType, EventData, State#state.modstate, State#state.botid),
+	{noreply, State#state{modstate=NewModState}};
+handle_cast({command, CommandId, Source, User, Args}, State) ->
+	{ok, NewModState} = (State#state.module):handle_command(CommandId, Source, User, Args, State#state.modstate, State#state.botid),
 	{noreply, State#state{modstate=NewModState}};
 handle_cast(_EventData, State) ->
 	error_logger:warning_msg("Unknown module cast (bad format): ~w~n", [_EventData]),

@@ -7,21 +7,35 @@
 -module(sporkk_woot).
 -author("Forkk").
 -behavior(sporkk_module).
+-include("modules.hrl").
 
--export([init/1, handle_event/4, code_change/3, terminate/1]).
+-export([get_info/0, init/1, handle_event/4, handle_command/6, code_change/3, terminate/1]).
 
 -record(state, {}).
+
+get_info() ->
+	#mod_info{
+	   name = "Woot",
+	   desc = "A module that says \\o/ when someone says \"woot\" or \"\\o/\".",
+	   short_desc = "A module that says \\o/ when someone says \"",
+	   version = {1, 0, 0},
+	   commands = []
+	  }.
+
 
 init(_BotId) ->
 	{ok, #state{}}.
 
-handle_event(message, {{chan, Channel}, _User, "\\o/"}, State, BotId) ->
-	sporkk:send(BotId, Channel, "\\o/"),
+handle_event(message, {Source, _User, "\\o/"}, State, BotId) ->
+	sporkk:send(BotId, Source, "\\o/"),
 	{ok, State};
-handle_event(message, {{chan, Channel}, _User, "woot"}, State, BotId) ->
-	sporkk:send(BotId, Channel, "\\o/"),
+handle_event(message, {Source, _User, "woot"}, State, BotId) ->
+	sporkk:send(BotId, Source, "\\o/"),
 	{ok, State};
 handle_event(_Type, _Data, State, _BotId) ->
+	{ok, State}.
+
+handle_command(_Cmd, _Source, _User, _Args, State, _BotId) ->
 	{ok, State}.
 
 code_change(_OldVsn, State, _Extra) ->

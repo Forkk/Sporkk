@@ -25,12 +25,14 @@
 %% 			id = atom() - An atom identifying this command. This will be used to identify the command when passing the command event to modules.
 %% 			name = string() - The string name of the command. This is a case-insensitive string used to allow users to call the command.
 %% 			desc = string() - The command's description. This should identify what the command does.
-%% 			usage = string() - The command's usage string (not including the command name). This will be displayed in the command's help.
+%% 			args = [{Name, Optional}] - A list of argument tuples describing the arguments the command takes. Currently only for display purposes.
+%% 				Name = string() - The string name of the argument.
+%% 				Optional = bool() - true if arg is optional, else false.
 -record(cmd_info,
 		{
 		 id,
 		 name,
 		 desc,
-		 usage
+		 args
 		}).
 
