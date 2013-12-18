@@ -10,7 +10,7 @@
 
 % API Functions
 -export([init/0]).
--export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1]).
+-export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1, add_bot_chans/2, remove_bot_chans/2]).
 -export([add_network/2, remove_network/1, get_network/1]).
 
 % Records
@@ -23,8 +23,8 @@
 		  network,
 		  % The bot's nick.
 		  nick,
-		  % List of strings representing the channels this bot will connect to.
-		  channels=[],
+		  % Set of strings representing the channels this bot will connect to.
+		  channels=sets:new(),
 		  % If the bot is enabled, 'true', else 'false'.
 		  enabled=true
 		 }).
@@ -55,7 +55,7 @@ init() ->
 %% @doc Adds a bot to the config. This is called by the bot manager's add_bot handler to add bots to the database.
 %% @spec add_bot(Id, Nick, NetworkId, Channels) -> {ok, Bot#bot{}}
 add_bot(Id, Nick, NetworkId, Channels) ->
-	BotConf = #bot_config{id=Id, nick=Nick, network=NetworkId, channels=Channels, enabled=true},
+	BotConf = #bot_config{id=Id, nick=Nick, network=NetworkId, channels=sets:from_list(Channels), enabled=true},
 	{atomic, ok} = mnesia:transaction(fun() -> mnesia:write(BotConf) end),
 	{ok, bot_from_config(BotConf)}.
 
@@ -78,6 +78,32 @@ get_bot(Id) ->
 	Query = qlc:q([C || C <- mnesia:table(bot_config), C#bot_config.id =:= Id]),
 	{atomic, [BotConf|_]} = mnesia:transaction(fun() -> qlc:e(Query) end),
 	{ok, bot_from_config(BotConf)}.
+
+%% @doc Adds the given channels to the bot with the given ID.
+%% 		NOTE: This does *NOT* tell the bot's process to join the channels. It only changes the DB entry.
+%% 		To make a bot join channels right now, call sporkk:join(BotId, Channels).
+add_bot_chans(BotId, Channels) ->
+	{atomic, ok} = mnesia:transaction(
+					 fun() ->
+							 [Bot] = mnesia:wread({bot_config, BotId}),
+							 % Combine the channels set with the Channels list.
+							 NewChans = sets:union(Bot#bot_config.channels, sets:from_list(Channels)),
+							 mnesia:write(bot_config, Bot#bot_config{channels=NewChans}, write)
+					 end),
+	ok.
+
+%% @doc Removes the given channels from the bot with the given ID.
+%% 		NOTE: This does *NOT* tell the bot's process to part from the channels. It only changes the DB entry.
+%% 		To make a bot part from channels right now, call sporkk:part(BotId, Channels).
+remove_bot_chans(BotId, Channels) ->
+	{atomic, ok} = mnesia:transaction(
+					 fun() ->
+							 [Bot] = mnesia:wread({bot_config, BotId}),
+							 % Remove everything in the Channels list from the channels set.
+							 NewChans = sets:subtract(Bot#bot_config.channels, sets:from_list(Channels)),
+							 mnesia:write(bot_config, Bot#bot_config{channels=NewChans}, write)
+					 end),
+	ok.
 
 
 %%%%%% Networks %%%%%%
@@ -109,6 +135,6 @@ bot_from_config(BotConf) ->
 	   id=BotConf#bot_config.id,
 	   network=BotConf#bot_config.network,
 	   nick=BotConf#bot_config.nick,
-	   channels=BotConf#bot_config.channels
+	   channels=sets:to_list(BotConf#bot_config.channels)
 	  }.
 
