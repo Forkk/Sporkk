@@ -152,8 +152,8 @@ running({recv, {DateTime, LineData}}, State) ->
 							 undefined
 					 end,
 			
-			% Send the message to the event manager.
-			gen_event:notify(sporkk:eventmgr(BotId), {message, {Source, Line#line.user, Line#line.body}}),
+			% Send the message to the module server for processing.
+			gen_server:cast(sporkk:modserv(BotId), {event, {message, {Source, Line#line.user, Line#line.body}}}),
 
 			% Continue running.
 			{next_state, running, State};

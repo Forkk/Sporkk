@@ -14,7 +14,7 @@
 
 -export([send/3]).
 
--export([connector/1, sender/1, receiver/1, eventmgr/1]).
+-export([connector/1, sender/1, receiver/1, modserv/1, modsup/1]).
 
 %% @doc Starts the main application process and its dependencies.
 start() ->
@@ -79,8 +79,11 @@ sender(Id) when is_atom(Id) ->     {global, combine_atoms(Id, sender)}.
 %% @doc Gets the receiver process name for the given bot ID.
 receiver(Id) when is_atom(Id) ->   {global, combine_atoms(Id, receiver)}.
 
-%% @doc Gets the event manager process name for the given bot ID.
-eventmgr(Id) when is_atom(Id) ->   {global, combine_atoms(Id, eventmgr)}.
+%% @doc Gets the module server process name for the given bot ID.
+modserv(Id) when is_atom(Id) ->   {global, combine_atoms(Id, modserv)}.
+
+%% @doc Gets the module supervisor process name for the given bot ID.
+modsup(Id) when is_atom(Id) ->   {global, combine_atoms(Id, modsup)}.
 
 
 %% ============================================================================

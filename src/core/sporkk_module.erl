@@ -4,13 +4,15 @@
 %% @doc Module for Sporkk's bot module behavior.
 %% ============================================================================
 -module(sporkk_module).
--behavior(gen_event).
+-behavior(gen_server).
+-include("modules.hrl").
 
--export([register_mod/2]).
+-export([start_link/2]).
 
 -export([behaviour_info/1]).
 
--export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2, code_change/3]).
+% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -record(state, {botid, module, modstate}).
 
@@ -21,6 +23,15 @@ behaviour_info(callbacks) ->
 	 %
 	 % Possible return values: {ok, State} | {error, Reason}
 	 {init, 1},
+
+	 % get_info() -> {ok, ModInfo}
+	 % 	Types:
+	 % 		ModInfo = #mod_info{}
+	 %
+	 % Called after init. This should be used to give the system some information about the module.
+	 % It should return a #mod_info record specifying information such as the module's name, version, commands, etc.
+	 %
+	 {get_info, 0},
 
 	 % handle_event(EventType, EventData, State, BotId) -> {ok, NewState}
 	 % 	Types:
@@ -36,24 +47,24 @@ behaviour_info(callbacks) ->
 	 %
 	 % message: {Source, User, Message}
 	 % 	Types:
-	 % 		Source = {SourceType, SourceName} - A tuple specifying either the channel the message was from or the sender's nick in the case of a PM.
-	 % 			SourceType = chan | msg | undefined - An atom indicating what type of source this message came from.
-	 % 			SourceName = string() - A string indicating the name of the source of this message.
+	 % 		Source = string() - A string specifying either the channel the message was from or the sender's nick in the case of a PM.
+	 % 							If the message was from a channel, this string will always start with a '#' character.
 	 % 		User = {Nick, Account} - A tuple of the nick and account (if applicable) of the user who sent the message.
 	 % 		Message = string() - The message the user sent.
 	 % Called when a user sends a message in a channel or directly to the bot.
 	 %
-	 % 
-	 % command: {Source, User, CommandId, Args}
-	 % 	Types:
-	 % 		Source = {SourceType, SourceName} - A tuple specifying either the channel the command was from or the sender's nick in the case of a PM.
-	 % 			SourceType = chan | msg | undefined - An atom indicating what type of source this command came from.
-	 % 			SourceName = string() - A string indicating the name of the source of this command.
-	 % 		User = {Nick, Account} - A tuple of the nick and account (if applicable) of the user who sent the command.
-	 % 		CommandId = atom() - The command's ID atom. This is the ID atom that was specified when the command was registered.
-	 % 		Args = [string()] - A list of strings representing the command's arguments.
-	 %
 	 {handle_event, 4},
+
+	 % handle_command(CommandId, Source, User, Args, State) -> {ok, NewState}
+	 % 	Types:
+	 % 		CommandId = atom() - An atom identifying the command. This will be the atom ID that the command was registered with.
+	 % 		Source = string() - A string specifying either the channel the message was from or the sender's nick in the case of a PM.
+	 % 							If the message was from a channel, this string will always start with a '#' character.
+	 % 		User = {Nick, Account} - A tuple of the nick and account (if applicable) of the user who sent the command.
+	 % 		Args = [string()] - A list of strings representing the command's arguments.
+	 % 		State = term() - The module's state.
+	 %
+	 {handle_command, 5},
 
 	 % code_change(OldVsn, State, Extra) -> {ok, NewState}
 	 % Called when this module's code changes. See OTP gen_event documentation for more info.
@@ -70,8 +81,8 @@ behaviour_info(callbacks) ->
 %% ============================================================================
 
 %% @doc Registers the given module module with the given bot ID.
-register_mod(BotId, Module) ->
-	gen_event:add_handler(sporkk:eventmgr(BotId), ?MODULE, [BotId, Module]).
+start_link(BotId, Module) ->
+	gen_server:start_link(?MODULE, [BotId, Module], []).
 
 
 %% ============================================================================
@@ -87,25 +98,25 @@ init([BotId, Module]) ->
 			{error, Reason}
 	end.
 
-%% @doc Handles an event from the event manager and passes it to the callback module.
-handle_event({EventType, EventData}, State) ->
+%% @doc Handles a cast from the module server.
+handle_cast({event, {EventType, EventData}}, State) ->
 	{ok, NewModState} = (State#state.module):handle_event(EventType, EventData, State#state.modstate, State#state.botid),
-	{ok, State#state{modstate=NewModState}};
-handle_event(_EventData, State) ->
-	error_logger:warning_msg("Unknown module event (bad format): ~w~n", [_EventData]),
-	{ok, State}.
+	{noreply, State#state{modstate=NewModState}};
+handle_cast(_EventData, State) ->
+	error_logger:warning_msg("Unknown module cast (bad format): ~w~n", [_EventData]),
+	{noreply, State}.
 
 %% @doc Called when code changes.
 code_change(OldVsn, State, Extra) ->
 	{ok, NewModState} = (State#state.module):code_change(OldVsn, State#state.modstate, Extra),
 	{ok, State#state{modstate=NewModState}}.
 
-%% @doc Called when the event handler is removed from the event manager. Calls the callback module's terminate function. 
+%% @doc Called when the event handler is removed from the router. Calls the callback module's terminate function. 
 terminate(_Arg, State) ->
 	(State#state.module):terminate(State#state.modstate).
 
 
 % Ignore these...
-handle_call(_Request, State) -> {ok, wat, State}.
+handle_call(_Request, _From, State) -> {noreply, State}.
 handle_info(_Info, State) -> {ok, State}.
 

@@ -51,7 +51,7 @@ gen_spec(Bot) ->
 	{Bot#bot.id,
 	 {sporkk_bot_sup, start_link, [Bot]},
 	 permanent,
-	 5000,
+	 8000,
 	 supervisor,
 	 [sporkk_bot_sup]}.
 

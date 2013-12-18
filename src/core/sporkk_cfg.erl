@@ -25,6 +25,8 @@
 		  nick,
 		  % Set of strings representing the channels this bot will connect to.
 		  channels=sets:new(),
+		  % Set of atoms representing the modules the bot should load on startup.
+		  modules=sets:new(),
 		  % If the bot is enabled, 'true', else 'false'.
 		  enabled=true
 		 }).
