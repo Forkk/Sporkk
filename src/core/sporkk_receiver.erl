@@ -65,8 +65,8 @@ connecting(_Request, State) ->
 registering({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
 	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, Line} = parse_line(Bot, DateTime, LineData),
-	case Line#line.operation of
+	{ok, Line} = irc_lib:parse_message(Bot, DateTime, LineData),
+	case Line#line.command of
 		ping ->
 			ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
 			{next_state, registering, State};
@@ -76,7 +76,7 @@ registering({recv, {DateTime, LineData}}, State) ->
 			NewNick = Bot#bot.nick ++ "_",
 			ok = gen_server:cast(sporkk:sender(BotId), {nick, NewNick}),
 			{next_state, registering, State#state{nick=NewNick}};
-		rpl_welcome ->
+		reply_welcome ->
 			error_logger:info_msg("Connected to IRC. Joining channels."),
 			Channels = Bot#bot.channels,
 			ok = gen_server:cast(sporkk:sender(BotId), {join, Channels}),
@@ -93,61 +93,74 @@ registering({recv, {DateTime, LineData}}, State) ->
 running({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
 	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, Line} = parse_line(Bot, DateTime, LineData),
-	Result = case Line#line.operation of
-				 ping ->
-					 ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
-					 {next_state, running, State};
-				 nickchanged ->
-					 {next_state, running, State#state{nick=Line#line.body}};
+	{ok, BareLine} = irc_lib:parse_message(Bot, DateTime, LineData),
 
-				 join ->
-					 case string:tokens(Line#line.origin, "!@") of
-						 [Nick, _User, _Host] ->
-							 gen_server:cast(sporkk:sender(BotId), {whois, Nick});
-						 _ ->
-							 pass
-					 end,
-					 {next_state, running, State};
-				 rpl_whoisaccount ->
-					 [Nick, Account] = Line#line.options,
-					 true = ets:insert(State#state.account_map, {Nick, Account}),
-					 {next_state, running, State};
-				 part ->
-					 case string:tokens(Line#line.origin, "!@") of
-						 [Nick, _User, _Host] ->
-							 true = ets:delete(State#state.account_map, Nick);
-						 _ ->
-							 pass
-					 end,
-					 {next_state, running, State};
-
-				 _ ->
-					 {next_state, running, State}
-			 end,
-	
 	% Fill out the account field on the line data.
-	NewLineData = case Line#line.origin of
-					  undefined ->
-						  Line;
-					  _ ->
-						  case string:tokens(Line#line.origin, "!@") of
-							  [Nick2, _User2, _Host2] ->
-								  case ets:lookup(State#state.account_map, Nick2) of
-									  [{_, Acct}] ->
-										  Line#line{account=Acct};
-									  _ ->
-										  Line
-								  end;
-							  _ ->
-								  Line
-						  end
-				  end,
+	Line = case BareLine#line.source of
+			   undefined ->
+				   BareLine;
+			   _ ->
+				   case string:tokens(BareLine#line.source, "!@") of
+					   [Nick2, _User2, _Host2] ->
+						   case ets:lookup(State#state.account_map, Nick2) of
+							   [{UserNick, Acct}] ->
+								   BareLine#line{user={UserNick, Acct}};
+							   _ ->
+								   BareLine
+						   end;
+					   _ ->
+						   BareLine
+				   end
+		   end,
 
-	% TODO: Send events to the event manager.
-	%gen_server:cast(, {line, NewLineData}),
+	case Line#line.command of
+		ping ->
+			ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
+			{next_state, running, State};
+		nickchanged ->
+			{next_state, running, State#state{nick=Line#line.body}};
 
-	Result.
+		join ->
+			case string:tokens(Line#line.source, "!@") of
+				[Nick, _User, _Host] ->
+					gen_server:cast(sporkk:sender(BotId), {whois, Nick});
+				_ ->
+					pass
+			end,
+			{next_state, running, State};
+		reply_whoisaccount ->
+			[Nick, Account] = Line#line.args,
+			true = ets:insert(State#state.account_map, {Nick, Account}),
+			{next_state, running, State};
+		part ->
+			case string:tokens(Line#line.source, "!@") of
+				[Nick, _User, _Host] ->
+					true = ets:delete(State#state.account_map, Nick);
+				_ ->
+					pass
+			end,
+			{next_state, running, State};
+
+		privmsg ->
+			% TODO: Parse the message to see if it's a command.
+			% Determine where the message was sent to (was it a channel message or a PM?)
+			Source = case Line#line.destination of
+						 [$#|_Channel] ->
+							 {chan, Line#line.destination};
+						 _ ->
+							 % TODO: Recognize PMs.
+							 undefined
+					 end,
+			
+			% Send the message to the event manager.
+			gen_event:notify(sporkk:eventmgr(BotId), {message, {Source, Line#line.user, Line#line.body}}),
+
+			% Continue running.
+			{next_state, running, State};
+
+		_ ->
+			{next_state, running, State}
+	end.
 
 % Ignore these.
 handle_event(_Event, StateName, State) ->
@@ -180,68 +193,4 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% ============================================================================
 %% Internal Functions
 %% ============================================================================
-
-%% ----------------------------------------------------------------------------
-%% @doc Parses a line from the IRC server.
-%% ----------------------------------------------------------------------------
-parse_line(Bot, DateTime, [$: | Line]) ->
-	BodyPos = string:chr(Line, $:),
-	Data = case BodyPos > 0 of
-			   true ->
-				   Header = string:substr(Line, 1, BodyPos - 1),
-				   Body = string:substr(Line, BodyPos + 1),
-				   HeaderBits = string:tokens(Header, " "),
-
-				   case length(HeaderBits) of
-					   1 ->
-						   #line{
-							  bot = Bot,
-							  datetime = DateTime,
-							  origin = lists:nth(1, HeaderBits),
-							  body = Body
-							 };
-					   2 ->
-						   #line{
-							  bot = Bot,
-							  datetime = DateTime,
-							  origin = lists:nth(1, HeaderBits),
-							  operation = irc_lib:operation_to_atom(lists:nth(2, HeaderBits)),
-							  body = Body
-							 };
-					   _ ->
-						   #line{
-							  bot = Bot, 
-							  datetime = DateTime,
-							  origin = lists:nth(1, HeaderBits),
-							  operation = irc_lib:operation_to_atom(lists:nth(2, HeaderBits)),
-							  destination = lists:nth(3, HeaderBits),
-							  options = lists:nthtail(3, HeaderBits),
-							  body = Body
-							 }
-				   end;
-			   false ->
-				   [Origin, Operation, Destination | _] = string:tokens(Line, " "),
-				   #line{
-					  bot = Bot,
-					  datetime = DateTime,
-					  origin = Origin,
-					  operation = irc_lib:operation_to_atom(Operation),
-					  destination = Destination,
-					  body = ""
-					 }
-		   end,
-	{ok, Data};
-
-parse_line(Bot, DateTime, [$P, $I, $N, $G, $\s, $: | Server]) ->
-	{ok,
-	 #line{
-		bot = Bot,
-	    datetime = DateTime,
-	    operation = ping,
-	    body = Server
-	   }
-	};
-
-parse_line(_Bot, _DateTime, _Data) ->
-	{error, malformed_line}.
 

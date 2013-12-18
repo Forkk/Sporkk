@@ -15,10 +15,10 @@
 %% @doc Record representing a line from the IRC server.
 -record(line, {bot,
 			   datetime,
-			   origin,
-			   operation,
+			   source,
+			   command,
 			   destination,
-			   options,
+			   args,
 			   body,
-			   account}).
+			   user}).
 

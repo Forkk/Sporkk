@@ -12,7 +12,7 @@
 
 -export([join/2, part/2, part/3]).
 
--export([say/3]).
+-export([send/3]).
 
 -export([connector/1, sender/1, receiver/1, eventmgr/1]).
 
@@ -61,7 +61,7 @@ part(Id, Channels) ->
 
 
 %% @doc Tells the bot with the given ID to send the given message to the given destination.
-say(Id, Dest, Message) ->
+send(Id, Dest, Message) ->
 	gen_server:cast(sender(Id), {privmsg, Dest, Message}).
 
 
