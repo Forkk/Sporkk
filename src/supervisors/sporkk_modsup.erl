@@ -10,7 +10,7 @@
 -behavior(supervisor).
 
 % API
--export([start_link/1, start_mod/2]).
+-export([start_link/1, start_mod/2, stop_mod/2]).
 
 % Callbacks
 -export([init/1]).
@@ -30,6 +30,14 @@ start_mod(BotId, ModName) ->
 							[sporkk_module, ModName]
 						   }).
 
+stop_mod(BotId, ModName) ->
+	case supervisor:terminate_child(proc(BotId), ModName) of
+		ok ->
+			ok = supervisor:delete_child(proc(BotId), ModName),
+			ok;
+		{error, not_found} ->
+			ok
+	end.
 %% ----------------------------------------------------------------------------
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @doc Starts the supervisor.

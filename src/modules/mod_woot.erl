@@ -4,7 +4,7 @@
 %% @doc An extremely complex module that makes the bot say "\o/"
 %% 		when someone says "woot" or "\o/".
 %% ============================================================================
--module(sporkk_woot).
+-module(mod_woot).
 -author("Forkk").
 -behavior(sporkk_module).
 -include("modules.hrl").

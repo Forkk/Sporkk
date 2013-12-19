@@ -106,7 +106,7 @@ running({recv, {DateTime, LineData}}, State) ->
 							   [{UserNick, Acct}] ->
 								   BareLine#line{user={UserNick, Acct}};
 							   _ ->
-								   BareLine
+								   BareLine#line{user={Nick2, none}}
 						   end;
 					   _ ->
 						   BareLine

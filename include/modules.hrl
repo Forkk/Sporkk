@@ -36,3 +36,11 @@
 		 args
 		}).
 
+
+%% @doc Record for storing module info in the module server.
+-record(module, {id, pid, name, desc, short_desc, version}).
+
+%% @doc Record for storing command info in the module server.
+-record(command, {id, name, desc, args, module}).
+
+

@@ -55,7 +55,7 @@ behaviour_info(callbacks) ->
 	 %
 	 {handle_event, 4},
 
-	 % handle_command(CommandId, Source, User, Args, State, BotId) -> {ok, NewState}
+	 % handle_command(CommandId, Source, User, Args, State, BotId) -> {ok, NewState} | {bad_usage, NewState}
 	 % 	Types:
 	 % 		CommandId = atom() - An atom identifying the command. This will be the atom ID that the command was registered with.
 	 % 		Source = string() - A string specifying either the channel the message was from or the sender's nick in the case of a PM.

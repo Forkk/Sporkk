@@ -9,19 +9,13 @@
 -include("modules.hrl").
 
 %% API Functions
--export([start_link/1]).
+-export([start_link/1, modules/1, commands/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 % State record
 -record(state, {botid, modules, commands}).
-
-% Record for storing module info.
--record(module, {id, pid, name, desc, short_desc, version}).
-
-% Record for storing command info.
--record(command, {id, name, desc, args, module}).
 
 %% ============================================================================
 %% API Functions
@@ -32,6 +26,15 @@
 %% ----------------------------------------------------------------------------
 start_link(BotId) ->
 	gen_server:start_link(sporkk:modserv(BotId), ?MODULE, [BotId], []).
+
+
+%% @doc Gets a list of the modserv's registered modules.
+modules(BotId) ->
+	gen_server:call(sporkk:modserv(BotId), get_module_list).
+
+%% @doc Gets a list of the modserv's available commands.
+commands(BotId) ->
+	gen_server:call(sporkk:modserv(BotId), get_command_list).
 
 %% ============================================================================
 %% Callbacks
@@ -53,6 +56,12 @@ init([BotId]) ->
 %%                                            {stop, Reason, State}
 %% @doc Handles call messages.
 %% ----------------------------------------------------------------------------
+handle_call(get_module_list, _From, State) ->
+	{reply, State#state.modules, State};
+
+handle_call(get_command_list, _From, State) ->
+	{reply, State#state.commands, State};
+
 handle_call(_Request, _From, State) ->
 	{ok, State}.
 
@@ -77,6 +86,20 @@ handle_cast({load_mod, Mod}, State) ->
 
 		{error, Error} ->
 			error_logger:error_msg("Failed to load bot module ~w: ~w~n", [Mod, Error]),
+			{noreply, State}
+	end;
+
+handle_cast({unload_mod, Mod}, State) ->
+	case lists:filter(fun(M) -> M#module.id == Mod end, State#state.modules) of
+		[Module] ->
+			% Remove the module from the module list.
+			NewModList = lists:filter(fun(M) -> M#module.id =/= Mod end, State#state.modules),
+			% Remove the module's commands.
+			NewCmdList = lists:filter(fun(C) -> C#command.module =/= Mod end, State#state.commands),
+			% Stop the module's process.
+			ok = sporkk_modsup:stop_mod(State#state.botid, Module#module.id),
+			{noreply, State#state{modules=NewModList, commands=NewCmdList}};
+		[] ->
 			{noreply, State}
 	end;
 
@@ -171,6 +194,5 @@ register_cmds([{Mod, CmdInfo}|More], State) ->
 				 args = CmdInfo#cmd_info.args,
 				 module = Mod
 				},
-	error_logger:info_msg("~w~n", [lists:append(State#state.commands, [Command])]),
 	register_cmds(More, State#state{commands=lists:append(State#state.commands, [Command])}).
 

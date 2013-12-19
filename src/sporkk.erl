@@ -12,7 +12,9 @@
 
 -export([join/2, part/2, part/3]).
 
--export([send/3]).
+-export([load_mod/2, unload_mod/2]).
+
+-export([send/3, notice/3]).
 
 -export([connector/1, sender/1, receiver/1, modserv/1, modsup/1]).
 
@@ -62,8 +64,20 @@ part(Id, Channels) ->
 	part(Id, Channels, "I was told to leave.").
 
 
+%% @doc Tells the given bot to load a module with the given ID.
+load_mod(BotId, ModId) ->
+	gen_server:cast(modserv(BotId), {load_mod, ModId}).
+
+%% @doc Tells the given bot to unload the given module.
+unload_mod(BotId, ModId) ->
+	gen_server:cast(modserv(BotId), {unload_mod, ModId}).
+
 %% @doc Tells the bot with the given ID to send the given message to the given destination.
 send(Id, Dest, Message) ->
+	gen_server:cast(sender(Id), {privmsg, Dest, Message}).
+
+%% @doc Tells the bot with the given ID to send the given notice to the given destination.
+notice(Id, Dest, Message) ->
 	gen_server:cast(sender(Id), {notice, Dest, Message}).
 
 
