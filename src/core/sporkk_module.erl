@@ -85,7 +85,6 @@ behaviour_info(callbacks) ->
 start_link(BotId, Module) ->
 	gen_server:start_link(?MODULE, [BotId, Module], []).
 
-
 %% ============================================================================
 %% Internal Functions - gen_event callbacks.
 %% ============================================================================
@@ -120,7 +119,12 @@ terminate(_Arg, State) ->
 	(State#state.module):terminate(State#state.modstate).
 
 
+%% @doc Get module info.
+handle_call(Message, From, State) ->
+	error_logger:warning_msg("Unknown call: ~p from ~p~n", [Message, From]),
+	{noreply, State}.
+
+
 % Ignore these...
-handle_call(_Request, _From, State) -> {noreply, State}.
 handle_info(_Info, State) -> {ok, State}.
 

@@ -42,10 +42,9 @@
 %% API Functions
 %% ============================================================================
 
-%% @doc Initializes Sporkk's schema and tables in Mnesia.
+%% @doc Initializes Sporkk's tables in Mnesia.
 %% @spec init() -> ok
 init() ->
-	mnesia:create_schema([node()]),
 	mnesia:create_table(bot_config, [{type, set}, {disc_copies, [node()]}, {attributes, record_info(fields, bot_config)}]),
 	mnesia:create_table(net_config, [{type, set}, {disc_copies, [node()]}, {attributes, record_info(fields, net_config)}]),
 	ok = mnesia:wait_for_tables([bot_config, net_config], 5000),

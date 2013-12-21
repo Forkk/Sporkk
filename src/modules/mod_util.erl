@@ -61,12 +61,12 @@ handle_command(ping, Source, _User, _Args, State, BotId) ->
 
 handle_command(modules, Source, _User, _Args, State, BotId) ->
 	Modules = sporkk_modserv:modules(BotId),
-	sporkk:send(BotId, Source, "Loaded modules: " ++ string:join(lists:map(fun(M) -> M#module.name end, Modules), ", ")),
+	sporkk:send(BotId, Source, "Loaded modules: " ++ string:join(lists:map(fun(M) -> M#mod_info.name end, Modules), ", ")),
 	{ok, State};
 
 handle_command(commands, Source, _User, _Args, State, BotId) ->
 	Commands = sporkk_modserv:commands(BotId),
-	sporkk:send(BotId, Source, "Available commands: " ++ string:join(lists:map(fun(C) -> C#command.name end, Commands), ", ")),
+	sporkk:send(BotId, Source, "Available commands: " ++ string:join(lists:map(fun(C) -> C#cmd_info.name end, Commands), ", ")),
 	{ok, State};
 
 handle_command(help, Source, {Nick, _Acct}, Args, State, BotId) ->
@@ -74,10 +74,10 @@ handle_command(help, Source, {Nick, _Acct}, Args, State, BotId) ->
 		[CmdName] ->
 			Commands = sporkk_modserv:commands(BotId),
 			% Find a matching command.
-			case lists:filter(fun(C) -> C#command.name == CmdName end, Commands) of
+			case lists:filter(fun(C) -> C#cmd_info.name == CmdName end, Commands) of
 				[Command | _] ->
 					% TODO: More descriptive help. Maybe say what module the command is from and its usage info.
-					sporkk:send(BotId, Source, Nick ++ ": " ++ Command#command.name ++ " - " ++ Command#command.desc),
+					sporkk:send(BotId, Source, Nick ++ ": " ++ Command#cmd_info.name ++ " - " ++ Command#cmd_info.desc),
 					{ok, State};
 
 				[] ->

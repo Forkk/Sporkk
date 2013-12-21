@@ -15,7 +15,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 % State record
--record(state, {botid, modules, commands}).
+-record(state, {botid, modules}).
 
 %% ============================================================================
 %% API Functions
@@ -45,7 +45,7 @@ commands(BotId) ->
 %% ----------------------------------------------------------------------------
 init([BotId]) ->
 	% Send messages to self to load all the modules that the bot has enabled.
-	{ok, #state{botid=BotId, modules=[], commands=[]}}.
+	{ok, #state{botid=BotId, modules=[]}}.
 
 %% ----------------------------------------------------------------------------
 %% @spec handle_call(Request, From, State) -> {reply, Reply, State}          |
@@ -57,10 +57,12 @@ init([BotId]) ->
 %% @doc Handles call messages.
 %% ----------------------------------------------------------------------------
 handle_call(get_module_list, _From, State) ->
-	{reply, State#state.modules, State};
+	{reply, lists:map(fun({Mod, _Pid}) -> Mod:get_info() end, State#state.modules), State};
 
 handle_call(get_command_list, _From, State) ->
-	{reply, State#state.commands, State};
+	% Combine the command list for each module.
+	ModCmdList = lists:concat(lists:map(fun({Mod, _Pid}) -> (Mod:get_info())#mod_info.commands end, State#state.modules)),
+	{reply, ModCmdList, State};
 
 handle_call(_Request, _From, State) ->
 	{ok, State}.
@@ -90,24 +92,22 @@ handle_cast({load_mod, Mod}, State) ->
 	end;
 
 handle_cast({unload_mod, Mod}, State) ->
-	case lists:filter(fun(M) -> M#module.id == Mod end, State#state.modules) of
-		[Module] ->
+	case lists:keyfind(Mod, 1, State#state.modules) of
+		{Mod, _Pid} ->
 			% Remove the module from the module list.
-			NewModList = lists:filter(fun(M) -> M#module.id =/= Mod end, State#state.modules),
-			% Remove the module's commands.
-			NewCmdList = lists:filter(fun(C) -> C#command.module =/= Mod end, State#state.commands),
+			NewModList = lists:filter(fun({M, _P}) -> M =/= Mod end, State#state.modules),
 			% Stop the module's process.
-			ok = sporkk_modsup:stop_mod(State#state.botid, Module#module.id),
-			{noreply, State#state{modules=NewModList, commands=NewCmdList}};
-		[] ->
+			ok = sporkk_modsup:stop_mod(State#state.botid, Mod),
+			{noreply, State#state{modules=NewModList}};
+		false ->
 			{noreply, State}
 	end;
 
 % Handle event messages.
 handle_cast({event, EventType, EventData}, State) ->
 	% Forward the event to every loaded module.
-	lists:foreach(fun(Module) ->
-						  gen_server:cast(Module#module.pid, {event, EventType, EventData})
+	lists:foreach(fun({_Mod, Pid}) ->
+						  gen_server:cast(Pid, {event, EventType, EventData})
 				  end, State#state.modules),
 	{noreply, State};
 
@@ -115,28 +115,20 @@ handle_cast({event, EventType, EventData}, State) ->
 handle_cast({command, Source, User, CmdMsg}, State) ->
 	% Parse the command.
 	% TODO: Allow quoting and escaping spaces in command strings. For now, we'll just tokenize spaces.
-	[Command | Args] = string:tokens(CmdMsg, " "),
+	[CommandName | Args] = string:tokens(CmdMsg, " "),
 
-	% Find a command spec matching the command.
-	case lists:filter(fun(E) -> E#command.name == Command end, State#state.commands) of
-		[CmdData | _] ->
-			% Find the command's module.
-			% This is a bit of a hack that relies on the 'id' field in the record being the second entry in the tuple.
-			Module = lists:keyfind(CmdData#command.module, 2, State#state.modules),
+	% Find a matching command.
+	case find_cmd(CommandName, State) of
+		{ok, Command, {_Mod, Pid}} ->
 			% Send the command message to the module.
-			gen_server:cast(Module#module.pid, {command, CmdData#command.id, Source, User, Args}),
-			ok;
+			gen_server:cast(Pid, {command, Command#cmd_info.id, Source, User, Args}),
+			{noreply, State};
 
-		[] ->
+		not_found ->
 			% TODO: Add "creative" command not found messages.
 			sporkk:send(State#state.botid, Source, "Command not found."),
-			ok
-	end,
-	{noreply, State};
-
-% Dynamic command registry (not fully supported yet).
-handle_cast({register_cmd, Mod, CmdInfo}, State) ->
-	{noreply, register_cmds([{Mod, CmdInfo}], State)};
+			{noreply, State}
+	end;
 
 % Ignore things that don't speak the same language. Mainly because I'm American.
 handle_cast(_Request, State) ->
@@ -167,32 +159,38 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Functions
 %% ============================================================================
 
-%% @doc Registers the given module and returns a new value for the modserv's state.
-register_mod(Mod, Pid, State) ->
+%% @spec find_cmd(Name, State) -> {ok, Command, Module} | not_found
+%% @doc Finds the command with the given Name.
+find_cmd(Name, State) ->
+	% To find a command, we need to search through the module list and look for it in each module.
+	% To do this, we'll use lists:filtermap on the module list and return a list of commands that match.
+	case lists:concat(lists:filtermap(fun({Mod, Pid}) -> find_cmd_in_mod(Mod, Pid, Name) end, State#state.modules)) of
+		[] ->
+			not_found;
+		[{Command, Module} | _OtherMods] ->
+			{ok, Command, Module}
+	end.
+
+% filtermap predicate for finding the given command in the given module.
+find_cmd_in_mod(Mod, Pid, CmdName) ->
+	% Get the module's info.
 	ModInfo = Mod:get_info(),
-	Module = #module{
-				id = Mod,
-				pid = Pid,
-				name = ModInfo#mod_info.name,
-				desc = ModInfo#mod_info.desc,
-				short_desc = ModInfo#mod_info.short_desc,
-				version = ModInfo#mod_info.version
-			   },
-	NewModList = lists:append(State#state.modules, [Module]),
+	% Filter the list of commands and put each in a tuple with its module name.
+	case lists:filtermap(fun(Cmd) -> 
+								 if Cmd#cmd_info.name =:= CmdName ->
+										{true, {Cmd, {Mod, Pid}}};
+									true ->
+										false
+								 end
+						 end, ModInfo#mod_info.commands) of
+		[] ->
+			false;
+		Cmds ->
+			{true, Cmds}
+	end.
 
-	{ok, NewState} = register_cmds(lists:map(fun(E) -> {Mod, E} end, ModInfo#mod_info.commands), State),
-	{ok, NewState#state{modules=NewModList}}.
 
-%% @doc Registers the given command info for the given module into the given state and returns the new state.
-register_cmds([], State) ->
-	{ok, State};
-register_cmds([{Mod, CmdInfo}|More], State) ->
-	Command = #command{
-				 id = CmdInfo#cmd_info.id,
-				 name = CmdInfo#cmd_info.name,
-				 desc = CmdInfo#cmd_info.desc,
-				 args = CmdInfo#cmd_info.args,
-				 module = Mod
-				},
-	register_cmds(More, State#state{commands=lists:append(State#state.commands, [Command])}).
+%% @doc Registers the given module and returns a new value for the modserv's state.
+register_mod(Mod, Id, State) ->
+	{ok, State#state{modules=lists:append(State#state.modules, [{Mod, Id}])}}.
 
