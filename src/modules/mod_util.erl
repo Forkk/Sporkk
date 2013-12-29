@@ -19,7 +19,7 @@ get_info() ->
 	   desc = "A module that provides some basic utility commands such as 'ping', 'commands', 'help', etc.",
 	   short_desc = "A basic utility module.",
 	   version = {1, 0, 0},
-	   commands = 
+	   commands =
 	   [
 		#cmd_info{
 		   id = ping,
