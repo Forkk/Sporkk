@@ -83,7 +83,7 @@ behaviour_info(callbacks) ->
 
 %% @doc Registers the given module module with the given bot ID.
 start_link(BotId, Module) ->
-	gen_server:start_link(?MODULE, [BotId, Module], []).
+	gen_server:start_link({global, {BotId, module, Module}}, ?MODULE, [BotId, Module], []).
 
 %% ============================================================================
 %% Internal Functions - gen_event callbacks.
@@ -91,6 +91,8 @@ start_link(BotId, Module) ->
 
 %% @doc Initializes the module state.
 init([BotId, Module]) ->
+	% On startup, let the module server know we're here.
+	gen_server:cast(sporkk:modserv(BotId), {mod_start, Module}),
 	case Module:init(BotId) of
 		{ok, State} ->
 			{ok, #state{botid=BotId, module=Module, modstate=State}};

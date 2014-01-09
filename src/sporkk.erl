@@ -23,6 +23,7 @@ start() ->
 	ok = application:start(inets),
 	ok = application:start(sasl),
 	ok = application:start(mnesia),
+	ok = application:start(gproc),
 	ok = application:start(sporkk).
 
 %% @doc Starts the bot with the given ID.
@@ -85,19 +86,19 @@ notice(Id, Dest, Message) ->
 %% Some hacky functions for finding process names of a bot's components.
 %% ============================================================================
 %% @doc Gets the connector process name for the given bot ID.
-connector(Id) when is_atom(Id) ->  {global, combine_atoms(Id, connector)}.
+connector(Id) when is_atom(Id) ->  {global, {Id, connector}}.
 
 %% @doc Gets the sender process name for the given bot ID.
-sender(Id) when is_atom(Id) ->     {global, combine_atoms(Id, sender)}.
+sender(Id) when is_atom(Id) ->     {global, {Id, sender}}.
 
 %% @doc Gets the receiver process name for the given bot ID.
-receiver(Id) when is_atom(Id) ->   {global, combine_atoms(Id, receiver)}.
+receiver(Id) when is_atom(Id) ->   {global, {Id, receiver}}.
 
 %% @doc Gets the module server process name for the given bot ID.
-modserv(Id) when is_atom(Id) ->   {global, combine_atoms(Id, modserv)}.
+modserv(Id) when is_atom(Id) ->   {global, {Id, modserv}}.
 
 %% @doc Gets the module supervisor process name for the given bot ID.
-modsup(Id) when is_atom(Id) ->   {global, combine_atoms(Id, modsup)}.
+modsup(Id) when is_atom(Id) ->   {global, {Id, modsup}}.
 
 
 %% ============================================================================

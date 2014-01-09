@@ -15,6 +15,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 % State record
+% botid is the bot's ID.
+% modules is a list of {ModId, MonitorId} tuples, where ModId is the module's 
+% Erlang module name, and MonitorId is the module's process monitor ref.
 -record(state, {botid, modules}).
 
 %% ============================================================================
@@ -57,11 +60,11 @@ init([BotId]) ->
 %% @doc Handles call messages.
 %% ----------------------------------------------------------------------------
 handle_call(get_module_list, _From, State) ->
-	{reply, lists:map(fun({Mod, _Pid}) -> Mod:get_info() end, State#state.modules), State};
+	{reply, lists:map(fun({Mod, _Mon}) -> Mod:get_info() end, State#state.modules), State};
 
 handle_call(get_command_list, _From, State) ->
 	% Combine the command list for each module.
-	ModCmdList = lists:concat(lists:map(fun({Mod, _Pid}) -> (Mod:get_info())#mod_info.commands end, State#state.modules)),
+	ModCmdList = lists:concat(lists:map(fun({Mod, _Mon}) -> (Mod:get_info())#mod_info.commands end, State#state.modules)),
 	{reply, ModCmdList, State};
 
 handle_call(_Request, _From, State) ->
@@ -95,7 +98,7 @@ handle_cast({unload_mod, Mod}, State) ->
 	case lists:keyfind(Mod, 1, State#state.modules) of
 		{Mod, _Pid} ->
 			% Remove the module from the module list.
-			NewModList = lists:filter(fun({M, _P}) -> M =/= Mod end, State#state.modules),
+			NewModList = lists:filter(fun({M, _Mon}) -> M =/= Mod end, State#state.modules),
 			% Stop the module's process.
 			ok = sporkk_modsup:stop_mod(State#state.botid, Mod),
 			{noreply, State#state{modules=NewModList}};
@@ -103,11 +106,17 @@ handle_cast({unload_mod, Mod}, State) ->
 			{noreply, State}
 	end;
 
+% Sent from a module process when it starts.
+handle_cast({mod_start, Mod}, State) ->
+	MonRef = monitor(process, global:whereis_name(mod_proc(State#state.botid, Mod))),
+	NewModList = lists:keystore(Mod, 1, State#state.modules, {Mod, MonRef}),
+	{noreply, State#state{modules=NewModList}};
+
 % Handle event messages.
 handle_cast({event, EventType, EventData}, State) ->
 	% Forward the event to every loaded module.
-	lists:foreach(fun({_Mod, Pid}) ->
-						  gen_server:cast(Pid, {event, EventType, EventData})
+	lists:foreach(fun({Mod, _Mon}) ->
+						  gen_server:cast(mod_proc(State#state.botid, Mod), {event, EventType, EventData})
 				  end, State#state.modules),
 	{noreply, State};
 
@@ -119,9 +128,9 @@ handle_cast({command, Source, User, CmdMsg}, State) ->
 
 	% Find a matching command.
 	case find_cmd(CommandName, State) of
-		{ok, Command, {_Mod, Pid}} ->
+		{ok, Command, {Mod, _Mon}} ->
 			% Send the command message to the module.
-			gen_server:cast(Pid, {command, Command#cmd_info.id, Source, User, Args}),
+			gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Source, User, Args}),
 			{noreply, State};
 
 		not_found ->
@@ -138,6 +147,13 @@ handle_cast(_Request, State) ->
 %% ----------------------------------------------------------------------------
 %% @doc Handle non cast/call messages.
 %% ----------------------------------------------------------------------------
+% Handle module processes crashing.
+handle_info({'DOWN', Ref, process, _Pid, _Reason}, State) ->
+	{Mod, Ref} = lists:keyfind(Ref, 2, State#state.modules),
+	ErrMsg = io_lib:format("Sporkk module ~w on bot ~w has crashed.", [Mod, State#state.botid]),
+	error_logger:error_msg(ErrMsg, []),
+	{noreply, State};
+
 handle_info(_Request, State) ->
 	{noreply, State}.
 
@@ -193,4 +209,8 @@ find_cmd_in_mod(Mod, Pid, CmdName) ->
 %% @doc Registers the given module and returns a new value for the modserv's state.
 register_mod(Mod, Id, State) ->
 	{ok, State#state{modules=lists:append(State#state.modules, [{Mod, Id}])}}.
+
+%% @doc Gets the process registry ID that the given module should be registered as.
+mod_proc(BotId, Mod) ->
+	{global, {BotId, module, Mod}}.
 

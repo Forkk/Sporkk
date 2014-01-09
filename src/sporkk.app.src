@@ -4,6 +4,7 @@
 	{applications, [
 		kernel,
 		stdlib,
+		gproc,
 		sasl,
 		inets
 	]},
