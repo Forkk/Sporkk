@@ -10,7 +10,7 @@
 
 % API Functions
 -export([init/0]).
--export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1, get_bot_extra/2, get_bot_extra/3, set_bot_extra/3, add_bot_chans/2, remove_bot_chans/2]).
+-export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1, get_bot_extra/2, get_bot_extra/3, set_bot_extra/3, add_bot_chans/2, remove_bot_chans/2, add_bot_mod/2, remove_bot_mod/2]).
 -export([add_network/2, remove_network/1, get_network/1]).
 
 % Records
@@ -108,6 +108,28 @@ remove_bot_chans(BotId, Channels) ->
 					 end),
 	ok.
 
+%% @doc Adds the given module to the bot with the given ID.
+%% 		NOTE: This does *NOT* tell the bot's process to load the module. It only changes the DB entry.
+add_bot_mod(BotId, Module) ->
+	{atomic, ok} = mnesia:transaction(
+					 fun() ->
+							 [Bot] = mnesia:wread({bot_config, BotId}),
+							 NewMods = sets:add_element(Module, Bot#bot_config.modules),
+							 mnesia:write(bot_config, Bot#bot_config{modules=NewMods}, write)
+					 end),
+	ok.
+
+%% @doc Removes the given module from the bot with the given ID.
+%% 		NOTE: This does *NOT* tell the bot's process to unload the module. It only changes the DB entry.
+remove_bot_mod(BotId, Module) ->
+	{atomic, ok} = mnesia:transaction(
+					 fun() ->
+							 [Bot] = mnesia:wread({bot_config, BotId}),
+							 NewMods = sets:del_element(Module, Bot#bot_config.modules),
+							 mnesia:write(bot_config, Bot#bot_config{modules=NewMods}, write)
+					 end),
+	ok.
+
 %% @doc Gets the extra config option with the given key from the given bot ID's configuration.
 get_bot_extra(BotId, Key) ->
 	case get_bot(BotId) of
@@ -170,6 +192,7 @@ bot_from_config(BotConf) ->
 	   network=BotConf#bot_config.network,
 	   nick=BotConf#bot_config.nick,
 	   channels=sets:to_list(BotConf#bot_config.channels),
+	   modules=sets:to_list(BotConf#bot_config.modules),
 	   extras=BotConf#bot_config.extra
 	  }.
 

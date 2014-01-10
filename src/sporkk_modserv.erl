@@ -47,7 +47,8 @@ commands(BotId) ->
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
 init([BotId]) ->
-	% Send messages to self to load all the modules that the bot has enabled.
+	% Send a message to ourself so we can load the bot's initial modules at startup.
+	gen_server:cast(self(), init),
 	{ok, #state{botid=BotId, modules=[]}}.
 
 %% ----------------------------------------------------------------------------
@@ -80,9 +81,13 @@ handle_cast({load_mod, Mod}, State) ->
 	case sporkk_modsup:start_mod(State#state.botid, Mod) of
 		{ok, Pid} ->
 			{ok, NewState} = register_mod(Mod, Pid, State),
+			sporkk:log_info(State#state.botid, io_lib:format("Loaded module '~w'.~n", [Mod])),
+			sporkk_cfg:add_bot_mod(State#state.botid, Mod),
 			{noreply, NewState};
 		{ok, Pid, _Info} ->
 			{ok, NewState} = register_mod(Mod, Pid, State),
+			sporkk:log_info(State#state.botid, io_lib:format("Loaded module '~w'.~n", [Mod])),
+			sporkk_cfg:add_bot_mod(State#state.botid, Mod),
 			{noreply, NewState};
 
 		{error, {already_started, _Pid}} ->
@@ -91,6 +96,7 @@ handle_cast({load_mod, Mod}, State) ->
 
 		{error, Error} ->
 			error_logger:error_msg("Failed to load bot module ~w: ~w~n", [Mod, Error]),
+			sporkk:log_info(State#state.botid, io_lib:format("Failed to load bot module ~w: ~w~n", [Mod, Error])),
 			{noreply, State}
 	end;
 
@@ -101,6 +107,8 @@ handle_cast({unload_mod, Mod}, State) ->
 			NewModList = lists:filter(fun({M, _Mon}) -> M =/= Mod end, State#state.modules),
 			% Stop the module's process.
 			ok = sporkk_modsup:stop_mod(State#state.botid, Mod),
+			sporkk:log_info(State#state.botid, io_lib:format("Unloaded module '~w'.~n", [Mod])),
+			sporkk_cfg:remove_bot_mod(State#state.botid, Mod),
 			{noreply, State#state{modules=NewModList}};
 		false ->
 			{noreply, State}
@@ -112,6 +120,12 @@ handle_cast({mod_start, Mod}, State) ->
 	MonRef = monitor(process, global:whereis_name(ModProcName)),
 	NewModList = lists:keystore(Mod, 1, State#state.modules, {Mod, MonRef}),
 	{noreply, State#state{modules=NewModList}};
+
+% Sent to self at startup. Used to load initial modules.
+handle_cast(init, State) ->
+	{ok, Bot} = sporkk_cfg:get_bot(State#state.botid),
+	lists:map(fun(Mod) -> sporkk:load_mod(State#state.botid, Mod) end, Bot#bot.modules),
+	{noreply, State};
 
 % Handle event messages.
 handle_cast({event, EventType, EventData}, State) ->

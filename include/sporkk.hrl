@@ -11,6 +11,7 @@
 		 network,
 		 nick,
 		 channels,
+		 modules,
 		 extras
 		}).
 
