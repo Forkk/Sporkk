@@ -14,7 +14,7 @@
 
 -export([load_mod/2, unload_mod/2]).
 
--export([send/3, notice/3]).
+-export([send/3, notice/3, log_info/2]).
 
 -export([connector/1, sender/1, receiver/1, modserv/1, modsup/1]).
 
@@ -81,6 +81,11 @@ send(Id, Dest, Message) ->
 notice(Id, Dest, Message) ->
 	gen_server:cast(sender(Id), {notice, Dest, Message}).
 
+%% @doc Sends the given message to the info logging system.
+%% This will send the message to all the channels listed in the bot's 'log_chans' extra.
+log_info(Id, Message) ->
+	gen_server:cast(sender(Id), {log, info, Message}).
+
 
 %% ============================================================================
 %% Some hacky functions for finding process names of a bot's components.
@@ -104,7 +109,5 @@ modsup(Id) when is_atom(Id) ->   {global, {Id, modsup}}.
 %% ============================================================================
 %% Internal Functions
 %% ============================================================================
-combine_atoms(First, Second) when is_atom(First), is_atom(Second) ->
-	% Nuclear fusion! Smash those atoms together!
-	list_to_atom(atom_to_list(First) ++ "_" ++ atom_to_list(Second)).
+
 

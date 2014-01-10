@@ -10,7 +10,8 @@
 		 id,
 		 network,
 		 nick,
-		 channels
+		 channels,
+		 extras
 		}).
 
 %% @doc Record representing a line from the IRC server.

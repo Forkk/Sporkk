@@ -10,7 +10,7 @@
 
 % API Functions
 -export([init/0]).
--export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1, add_bot_chans/2, remove_bot_chans/2]).
+-export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1, get_bot_extra/2, get_bot_extra/3, set_bot_extra/3, add_bot_chans/2, remove_bot_chans/2]).
 -export([add_network/2, remove_network/1, get_network/1]).
 
 % Records
@@ -27,6 +27,8 @@
 		  channels=sets:new(),
 		  % Set of atoms representing the modules the bot should load on startup.
 		  modules=sets:new(),
+		  % List of extra configuration options.
+		  extra=[],
 		  % If the bot is enabled, 'true', else 'false'.
 		  enabled=true
 		 }).
@@ -106,6 +108,37 @@ remove_bot_chans(BotId, Channels) ->
 					 end),
 	ok.
 
+%% @doc Gets the extra config option with the given key from the given bot ID's configuration.
+get_bot_extra(BotId, Key) ->
+	case get_bot(BotId) of
+		{ok, #bot{extras=Extras}} ->
+			case lists:keyfind(Key, 1, Extras) of
+				{Key, Value} ->
+					{ok, Value};
+				false ->
+					no_key
+			end;
+		no_bot ->
+			no_bot
+	end.
+get_bot_extra(BotId, Key, Default) ->
+	case get_bot_extra(BotId, Key) of
+		no_key ->
+			Default;
+		Value ->
+			Value
+	end.
+
+set_bot_extra(BotId, Key, Value) ->
+	{atomic, ok} = mnesia:transaction(
+					 fun() ->
+							 [Bot] = mnesia:wread({bot_config, BotId}),
+							 % Combine the channels set with the Channels list.
+							 NewExtras = lists:keystore(Key, 1, Bot#bot_config.extra, {Key, Value}),
+							 mnesia:write(bot_config, Bot#bot_config{extra=NewExtras}, write)
+					 end),
+	ok.
+
 
 %%%%%% Networks %%%%%%
 
@@ -136,6 +169,7 @@ bot_from_config(BotConf) ->
 	   id=BotConf#bot_config.id,
 	   network=BotConf#bot_config.network,
 	   nick=BotConf#bot_config.nick,
-	   channels=sets:to_list(BotConf#bot_config.channels)
+	   channels=sets:to_list(BotConf#bot_config.channels),
+	   extras=BotConf#bot_config.extra
 	  }.
 

@@ -108,7 +108,8 @@ handle_cast({unload_mod, Mod}, State) ->
 
 % Sent from a module process when it starts.
 handle_cast({mod_start, Mod}, State) ->
-	MonRef = monitor(process, global:whereis_name(mod_proc(State#state.botid, Mod))),
+	{global, ModProcName} = mod_proc(State#state.botid, Mod),
+	MonRef = monitor(process, global:whereis_name(ModProcName)),
 	NewModList = lists:keystore(Mod, 1, State#state.modules, {Mod, MonRef}),
 	{noreply, State#state{modules=NewModList}};
 
@@ -149,9 +150,14 @@ handle_cast(_Request, State) ->
 %% ----------------------------------------------------------------------------
 % Handle module processes crashing.
 handle_info({'DOWN', Ref, process, _Pid, _Reason}, State) ->
-	{Mod, Ref} = lists:keyfind(Ref, 2, State#state.modules),
-	ErrMsg = io_lib:format("Sporkk module ~w on bot ~w has crashed.", [Mod, State#state.botid]),
-	error_logger:error_msg(ErrMsg, []),
+	case lists:keyfind(Ref, 2, State#state.modules) of
+		{Mod, Ref} ->
+			ErrMsg = io_lib:format("Sporkk module '~w' on bot '~w' has crashed!", [Mod, State#state.botid]),
+			error_logger:error_msg("~s~n", [ErrMsg]),
+			sporkk:log_info(State#state.botid, ErrMsg);
+		false ->
+			pass
+	end,
 	{noreply, State};
 
 handle_info(_Request, State) ->
