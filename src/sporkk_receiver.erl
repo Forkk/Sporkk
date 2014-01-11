@@ -91,6 +91,7 @@ registering({recv, {DateTime, LineData}}, State) ->
 %% ----------------------------------------------------------------------------
 running({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
+	BotNick = State#state.nick,
 	{ok, Bot} = sporkk_cfg:get_bot(BotId),
 	{ok, BareLine} = irc_lib:parse_message(Bot, DateTime, LineData),
 
@@ -114,22 +115,35 @@ running({recv, {DateTime, LineData}}, State) ->
 			{next_state, running, State#state{nick=Line#line.body}};
 
 		privmsg ->
-			% Send the message to the module server for processing.
-			gen_server:cast(sporkk:modserv(BotId), {event, message, {Line#line.dest, Line#line.sender, Line#line.body}}),
+			case (Line#line.sender)#user.nick of
+				BotNick ->
+					% Ignore anything received that is from the bot.
+					pass;
 
-			% Figure out if it's a command.
-			Body = Line#line.body,
-			% TODO: Allow changing the command prefix.
-			% TODO: Allow using the bot's nick as a command prefix.
-			PfxPos = string:chr(Body, $.),
-			if
-				PfxPos =:= 1, length(Body) > 1 ->
-					CmdMsg = string:right(Body, length(Body)-1),
-					% Don't bother parsing the command. We'll let the module server handle that.
-					gen_server:cast(sporkk:modserv(BotId), {command, Line#line.dest, Line#line.sender, CmdMsg});
+				_ ->
+					% If the message was sent to the bot, set the destination to the sender's nick.
+					Dest = case Line#line.dest of
+							   BotNick -> (Line#line.sender)#user.nick;
+							   Other -> Other
+						   end,
+					
+					% Send the message to the module server for processing.
+					gen_server:cast(sporkk:modserv(BotId), {event, message, {Dest, Line#line.sender, Line#line.body}}),
 
-				true ->
-					pass
+					% Figure out if it's a command.
+					Body = Line#line.body,
+					% TODO: Allow changing the command prefix.
+					% TODO: Allow using the bot's nick as a command prefix.
+					PfxPos = string:chr(Body, $.),
+					if
+						PfxPos =:= 1, length(Body) > 1 ->
+							CmdMsg = string:right(Body, length(Body)-1),
+							% Don't bother parsing the command. We'll let the module server handle that.
+							gen_server:cast(sporkk:modserv(BotId), {command, Dest, Line#line.sender, CmdMsg});
+
+						true ->
+							pass
+					end
 			end,
 
 			% Continue running.
