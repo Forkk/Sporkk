@@ -136,7 +136,7 @@ handle_cast({event, EventType, EventData}, State) ->
 	{noreply, State};
 
 % Handle command messages.
-handle_cast({command, Source, User, CmdMsg}, State) ->
+handle_cast({command, Dest, Sender, CmdMsg}, State) ->
 	% Parse the command.
 	% TODO: Allow quoting and escaping spaces in command strings. For now, we'll just tokenize spaces.
 	[CommandName | Args] = string:tokens(CmdMsg, " "),
@@ -145,12 +145,12 @@ handle_cast({command, Source, User, CmdMsg}, State) ->
 	case find_cmd(CommandName, State) of
 		{ok, Command, {Mod, _Mon}} ->
 			% Send the command message to the module.
-			gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Source, User, Args}),
+			gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Dest, Sender, Args}),
 			{noreply, State};
 
 		not_found ->
 			% TODO: Add "creative" command not found messages.
-			sporkk:send(State#state.botid, Source, "Command not found."),
+			sporkk:send(State#state.botid, Dest, "Command not found."),
 			{noreply, State}
 	end;
 

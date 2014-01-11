@@ -43,7 +43,7 @@ start_link(BotId) ->
 %% ----------------------------------------------------------------------------
 init([BotId]) ->
 	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, connecting, #state{botid=BotId, nick=Bot#bot.nick, account_map=ets:new(receiver_account_map, [private])}}.
+	{ok, connecting, #state{botid=BotId, nick=Bot#bot.nick}}.
 
 
 %% ----------------------------------------------------------------------------
@@ -93,59 +93,19 @@ registering({recv, {DateTime, LineData}}, State) ->
 running({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
 	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, BareLine} = irc_lib:parse_message(Bot, DateTime, LineData),
-
-	% Fill out the account field on the line data.
-	Line = case BareLine#line.source of
-			   undefined ->
-				   BareLine;
-			   _ ->
-				   case string:tokens(BareLine#line.source, "!@") of
-					   [Nick2, _User2, _Host2] ->
-						   case ets:lookup(State#state.account_map, Nick2) of
-							   [{UserNick, Acct}] ->
-								   BareLine#line{user={UserNick, Acct}};
-							   _ ->
-								   BareLine#line{user={Nick2, none}}
-						   end;
-					   _ ->
-						   BareLine
-				   end
-		   end,
+	{ok, Line} = irc_lib:parse_message(Bot, DateTime, LineData),
 
 	case Line#line.command of
 		ping ->
 			ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
 			{next_state, running, State};
+
 		nickchanged ->
 			{next_state, running, State#state{nick=Line#line.body}};
 
-		join ->
-			case string:tokens(Line#line.source, "!@") of
-				[Nick, _User, _Host] ->
-					gen_server:cast(sporkk:sender(BotId), {whois, Nick});
-				_ ->
-					pass
-			end,
-			{next_state, running, State};
-		reply_whoisaccount ->
-			[Nick, Account | _] = Line#line.args,
-			true = ets:insert(State#state.account_map, {Nick, Account}),
-			{next_state, running, State};
-		part ->
-			case string:tokens(Line#line.source, "!@") of
-				[Nick, _User, _Host] ->
-					true = ets:delete(State#state.account_map, Nick);
-				_ ->
-					pass
-			end,
-			{next_state, running, State};
-
 		privmsg ->
-			Source = Line#line.destination,
-			
 			% Send the message to the module server for processing.
-			gen_server:cast(sporkk:modserv(BotId), {event, message, {Source, Line#line.user, Line#line.body}}),
+			gen_server:cast(sporkk:modserv(BotId), {event, message, {Line#line.dest, Line#line.sender, Line#line.body}}),
 
 			% Figure out if it's a command.
 			Body = Line#line.body,
@@ -156,7 +116,7 @@ running({recv, {DateTime, LineData}}, State) ->
 				PfxPos =:= 1, length(Body) > 1 ->
 					CmdMsg = string:right(Body, length(Body)-1),
 					% Don't bother parsing the command. We'll let the module server handle that.
-					gen_server:cast(sporkk:modserv(BotId), {command, Source, Line#line.user, CmdMsg});
+					gen_server:cast(sporkk:modserv(BotId), {command, Line#line.dest, Line#line.sender, CmdMsg});
 
 				true ->
 					pass

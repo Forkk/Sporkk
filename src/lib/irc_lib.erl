@@ -159,18 +159,29 @@ whois(Nick) ->
 %% ----------------------------------------------------------------------------
 %% @doc Parses a line from the IRC server into a #line record.
 %% ----------------------------------------------------------------------------
-parse_message(Bot, DateTime, Line) when is_binary(Line) ->
-	parse_message(Bot, DateTime, binary_to_list(Line));
+parse_message(BotId, DateTime, Line) when is_binary(Line) ->
+	parse_message(BotId, DateTime, binary_to_list(Line));
 
-parse_message(Bot, DateTime, Line) ->
-	{User, Command, Args, Body} = parse_line(Line),
-	Dest = if length(Args) >= 1 -> lists:nth(1, Args); true -> undefined end,
+parse_message(BotId, DateTime, Line) ->
+	{SourceStr, Command, Args, Body} = parse_line(Line),
+	Sender = case SourceStr of
+				 none ->
+					 none;
+				 _ ->
+					 case string:tokens(SourceStr, "!@") of
+						 [Nick, Ident, Host] ->
+							 {Nick, Ident, Host, none};
+						 _ ->
+							 none
+					 end
+			 end,
+	Dest = if length(Args) >= 1 -> lists:nth(1, Args); true -> none end,
 	{ok, #line{
-			bot = Bot,
+			botid = BotId,
 			datetime = DateTime,
-			source = User,
+			sender = Sender,
 			command = command_to_atom(Command),
-			destination = Dest,
+			dest = Dest,
 			args = Args,
 			body = Body
 		   }}.
@@ -185,7 +196,7 @@ parse_line([$: | Line]) ->
 
 parse_line(Line) ->
 	{Command, Args, Body} = parse_cmd(Line),
-	{undefined, Command, Args, Body}.
+	{none, Command, Args, Body}.
 
 % Parses the line's command, arguments, and body. Returns them in a tuple {Command, Args, Body}.
 parse_cmd(Line) ->

@@ -10,8 +10,23 @@
 
 % API Functions
 -export([init/0]).
--export([add_bot/4, remove_bot/1, get_bots/0, get_bot/1, get_bot_extra/2, get_bot_extra/3, set_bot_extra/3, add_bot_chans/2, remove_bot_chans/2, add_bot_mod/2, remove_bot_mod/2]).
--export([add_network/2, remove_network/1, get_network/1]).
+
+-export([
+		 add_bot/4, remove_bot/1, get_bots/0, get_bot/1,
+		 get_bot_extra/2, get_bot_extra/3, set_bot_extra/3,
+		 add_bot_chans/2, remove_bot_chans/2,
+		 add_bot_mod/2, remove_bot_mod/2
+		]).
+
+-export([
+		 get_user/3,
+		 create_user/2, add_user/2, remove_user/1,
+		 add_user_group/3, remove_user_group/3
+		]).
+
+-export([
+		 add_network/2, remove_network/1, get_network/1
+		]).
 
 % Records
 
@@ -27,6 +42,10 @@
 		  channels=sets:new(),
 		  % Set of atoms representing the modules the bot should load on startup.
 		  modules=sets:new(),
+		  % List of {User, GroupId} tuples, mapping users' nickserv accounts to their user group for this bot.
+		  usergrps=[],
+		  % List of {Module, [GroupId|_]} or {module, all} tuples for specifying which users can use which modules.
+		  modgrps=[],
 		  % List of extra configuration options.
 		  extra=[],
 		  % If the bot is enabled, 'true', else 'false'.
@@ -40,6 +59,19 @@
 		  servers=[]
 		 }).
 
+% Record for storing user information.
+-record(usr_config, {
+		  % The user's username.
+		  name,
+		  % The user's hashed, salted password.
+		  pass,
+		  % The user's global groups - groups the user is in for every bot.
+		  % Primarily used for "owners" of the bot.
+		  groups=sets:new(),
+		  % Extra information.
+		  extras=[]
+		 }).
+
 %% ============================================================================
 %% API Functions
 %% ============================================================================
@@ -49,7 +81,8 @@
 init() ->
 	mnesia:create_table(bot_config, [{type, set}, {disc_copies, [node()]}, {attributes, record_info(fields, bot_config)}]),
 	mnesia:create_table(net_config, [{type, set}, {disc_copies, [node()]}, {attributes, record_info(fields, net_config)}]),
-	ok = mnesia:wait_for_tables([bot_config, net_config], 5000),
+	mnesia:create_table(usr_config, [{type, set}, {disc_copies, [node()]}, {attributes, record_info(fields, usr_config)}]),
+	ok = mnesia:wait_for_tables([bot_config, net_config, usr_config], 5000),
 	ok.
 
 
@@ -146,9 +179,9 @@ get_bot_extra(BotId, Key) ->
 get_bot_extra(BotId, Key, Default) ->
 	case get_bot_extra(BotId, Key) of
 		no_key ->
-			Default;
-		Value ->
-			Value
+			{ok, Default};
+		{ok, Value} ->
+			{ok, Value}
 	end.
 
 set_bot_extra(BotId, Key, Value) ->
@@ -160,6 +193,125 @@ set_bot_extra(BotId, Key, Value) ->
 							 mnesia:write(bot_config, Bot#bot_config{extra=NewExtras}, write)
 					 end),
 	ok.
+
+
+%%%%%% User %%%%%%
+
+%% @doc Creates a new user with the given password. The password will be hashed using the passwd module.
+create_user(Name, Pass) ->
+	add_user(Name, passwd:hash_pass(sha512, Pass)).
+
+%% @doc Adds a user to the database.
+add_user(Name, PassHash) ->
+	User = #usr_config{name=Name, pass=PassHash, groups=sets:new()},
+	case mnesia:transaction(fun() ->
+									case mnesia:wread({usr_config, Name}) of
+										[] ->
+											% User doesn't exist. Write the new user to the database.
+											mnesia:write(User);
+										[_User] ->
+											% The user exists. Return an error.
+											user_exists
+									end
+							end) of
+		{atomic, ok} ->
+			ok;
+		{atomic, Error} ->
+			{error, Error}
+	end.
+
+%% @doc Adds a user to the database.
+remove_user(Name) ->
+	case mnesia:transaction(fun() ->
+									case mnesia:wread({usr_config, Name}) of
+										[] ->
+											% User doesn't exist. Error.
+											no_user;
+										[_User] ->
+											% Go through all the bots and remove this user from groups.
+											lists:map(fun(Bot) ->
+															  % Filter out group entries with the user's name in them.
+															  mnesia:write(Bot#bot_config{usergrps=lists:filter(fun({EntryName, _Group}) -> EntryName =/= Name end)})
+													  end, mnesia:wread(bot_config)),
+											ok
+									end
+							end)
+	of
+		{atomic, ok} ->
+			ok;
+		{atomic, Error} ->
+			{error, Error}
+	end.
+
+%% @doc Fills out the given 'user' record with the given username's account info.
+%% Returns {ok, User}, where User is a 'user' record, if successful.
+get_user(BotId, Name, User) ->
+	case mnesia:transaction(
+		   fun() ->
+				   [Bot] = mnesia:read({bot_config, BotId}),
+				   case mnesia:read({usr_config, Name}) of
+					   [UsrCfg] ->
+						   {Bot, UsrCfg};
+					   [] ->
+						   no_user
+				   end
+		   end)
+	of
+		{atomic, {Bot, UserCfg}} ->
+			% Get the user's groups for this bot.
+			BotGroups = case lists:keyfind(Name, 1, Bot#bot_config.usergrps) of
+							false -> sets:new();
+							BotGrps -> BotGrps 
+						end,
+			% Merge the user's bot group list with the user's global group list, set the username, and return.
+			{ok, User#user{
+				   username=Name,
+				   groups=sets:union(UserCfg#usr_config.groups, BotGroups)
+				  }};
+		{atomic, Error} ->
+			{error, Error}
+	end.
+
+
+%% @doc Adds the user with the given username to the given group ID on the given bot.
+add_user_group(BotId, UserName, GroupId) ->
+	mod_user_group(add, BotId, UserName, GroupId).
+
+%% @doc Removes the user with the given username from the given group ID on the given bot.
+remove_user_group(BotId, UserName, GroupId) ->
+	mod_user_group(del, BotId, UserName, GroupId).
+
+mod_user_group(Type, BotId, UserName, GroupId) ->
+	case
+		mnesia:transaction(
+		  fun() ->
+				  [Bot] = mnesia:wread({bot_config, BotId}),
+				  case mnesia:wread({usr_config, UserName}) of
+					  [_User] ->
+						  OldSet = case lists:keyfind(UserName, 1, Bot#bot_config.usergrps) of
+									   {UserName, Groups} -> 
+										   Groups;
+									   false ->
+										   sets:new()
+								   end,
+						  NewEntry = case Type of
+										 add ->
+											 sets:add_element(GroupId, OldSet);
+										 del ->
+											 sets:del_element(GroupId, OldSet)
+									 end,
+						  NewUserGrps = lists:keystore(UserName, 1, Bot#bot_config.usergrps, NewEntry),
+						  mnesia:write(bot_config, Bot#bot_config{usergrps=NewUserGrps});
+					  [] ->
+						  no_user
+				  end
+		  end)
+	of
+		{atomic, ok} ->
+			ok;
+		{atomic, Error} ->
+			{error, Error}
+	end.
 
 
 %%%%%% Networks %%%%%%
