@@ -101,7 +101,6 @@ running({recv, {DateTime, LineData}}, State) ->
 				   BareLine;
 			   User ->
 				   % Check with the auth server to see if the user is logged in.
-				   error_logger:info_report({checking_account_for, User}),
 				   NewUser = sporkk_authserv:get_user(State#state.botid, User),
 				   BareLine#line{sender=NewUser}
 		   end,
