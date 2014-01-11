@@ -22,8 +22,7 @@
 		 botid,
 		 % A datetime structure specifying when the line was received.
 		 datetime,
-		 % A tuple in the format {Nick, Ident, Host, Account}, specifying who this line came from.
-		 % The "Account" value specifies the user's account ID. If the user has no account, it will be 'none'.
+		 % A 'user' record specifying who sent this line.
 		 % If the line isn't from a user, this will be 'none'.
 		 sender=none,
 		 % An atom identifying the command in this line.
@@ -47,8 +46,8 @@
 		 % The user's hostname.
 		 hostname,
 		 % The user's username on Sporkk.
-		 username,
+		 username=none,
 		 % The user's groups on the bot for which this record is being used.
-		 groups
+		 groups=[]
 		}).
 

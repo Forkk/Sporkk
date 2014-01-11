@@ -4,6 +4,7 @@
 %% @doc Module with API functions for Sporkk's configs.
 %% ============================================================================
 -module(sporkk_cfg).
+-include("db.hrl").
 -include("sporkk.hrl").
 
 -include_lib("stdlib/include/qlc.hrl").
@@ -27,50 +28,6 @@
 -export([
 		 add_network/2, remove_network/1, get_network/1
 		]).
-
-% Records
-
-% Record for storing information about a bot's configuration.
--record(bot_config, {
-		  % An ID that uniquely identifies this bot.
-		  id,
-		  % The ID of the network that this bot connects to.
-		  network,
-		  % The bot's nick.
-		  nick,
-		  % Set of strings representing the channels this bot will connect to.
-		  channels=sets:new(),
-		  % Set of atoms representing the modules the bot should load on startup.
-		  modules=sets:new(),
-		  % List of {User, GroupId} tuples, mapping users' nickserv accounts to their user group for this bot.
-		  usergrps=[],
-		  % List of {Module, [GroupId|_]} or {module, all} tuples for specifying which users can use which modules.
-		  modgrps=[],
-		  % List of extra configuration options.
-		  extra=[],
-		  % If the bot is enabled, 'true', else 'false'.
-		  enabled=true
-		 }).
-
-% Record for storing information about an IRC network.
--record(net_config, {
-		  % An ID that uniquely identifies this network.
-		  id,
-		  servers=[]
-		 }).
-
-% Record for storing user information.
--record(usr_config, {
-		  % The user's username.
-		  name,
-		  % The user's hashed, salted password.
-		  pass,
-		  % The user's global groups - groups the user is in for every bot.
-		  % Primarily used for "owners" of the bot.
-		  groups=sets:new(),
-		  % Extra information.
-		  extras=[]
-		 }).
 
 %% ============================================================================
 %% API Functions
@@ -197,9 +154,11 @@ set_bot_extra(BotId, Key, Value) ->
 
 %%%%%% User %%%%%%
 
-%% @doc Creates a new user with the given password. The password will be hashed using the passwd module.
+%% @doc Creates a new user with the given password. The password will be hashed using sha512 and then passwed to the the passwd module to be salted and hashed again.
+%% Passwords are hashed twice so that when a user wants to authenticate, the password can be hashed *before* being sent to the auth server.
+%% This way, if an auth request is sent to the auth server and causes the auth server to crash, when the Erlang shell prints the last message sent to the server, the password won't be in plain text.
 create_user(Name, Pass) ->
-	add_user(Name, passwd:hash_pass(sha512, Pass)).
+	add_user(Name, passwd:hash_pass(sha512, crypto:hash(sha512, Pass))).
 
 %% @doc Adds a user to the database.
 add_user(Name, PassHash) ->
@@ -222,6 +181,7 @@ add_user(Name, PassHash) ->
 
 %% @doc Adds a user to the database.
 remove_user(Name) ->
+	BotConfQuery = qlc:q([C || C <- mnesia:table(bot_config)]),
 	case mnesia:transaction(fun() ->
 									case mnesia:wread({usr_config, Name}) of
 										[] ->
@@ -231,8 +191,9 @@ remove_user(Name) ->
 											% Go through all the bots and remove this user from groups.
 											lists:map(fun(Bot) ->
 															  % Filter out group entries with the user's name in them.
-															  mnesia:write(Bot#bot_config{usergrps=lists:filter(fun({EntryName, _Group}) -> EntryName =/= Name end)})
-													  end, mnesia:wread(bot_config)),
+															  mnesia:write(Bot#bot_config{usergrps=lists:filter(fun({EntryName, _Group}) -> EntryName =/= Name end, Bot#bot_config.usergrps)})
+													  end, qlc:e(BotConfQuery)),
+											mnesia:delete({usr_config, Name}),
 											ok
 									end
 							end)

@@ -81,6 +81,14 @@ init([Bot]) ->
 		5000,
 		supervisor,
 		[sporkk_modserv]
+	   },
+	   % The authentication server for managing user sessions and tracking who's logged in as who.
+	   {sporkk_authserv,
+		{sporkk_authserv, start_link, [Bot#bot.id]},
+		permanent,
+		5000,
+		worker,
+		[sporkk_authserv]
 	   }
 	  ]}}.
 

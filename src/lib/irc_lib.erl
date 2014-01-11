@@ -170,7 +170,7 @@ parse_message(BotId, DateTime, Line) ->
 				 _ ->
 					 case string:tokens(SourceStr, "!@") of
 						 [Nick, Ident, Host] ->
-							 {Nick, Ident, Host, none};
+							 #user{nick=string:strip(Nick), ident=string:strip(Ident), hostname=string:strip(Host)};
 						 _ ->
 							 none
 					 end

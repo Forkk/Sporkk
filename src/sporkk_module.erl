@@ -105,8 +105,8 @@ init([BotId, Module]) ->
 handle_cast({event, EventType, EventData}, State) ->
 	{ok, NewModState} = (State#state.module):handle_event(EventType, EventData, State#state.modstate, State#state.botid),
 	{noreply, State#state{modstate=NewModState}};
-handle_cast({command, CommandId, Source, User, Args}, State) ->
-	{ok, NewModState} = (State#state.module):handle_command(CommandId, Source, User, Args, State#state.modstate, State#state.botid),
+handle_cast({command, CommandId, Dest, Sender, Args}, State) ->
+	{ok, NewModState} = (State#state.module):handle_command(CommandId, Dest, Sender, Args, State#state.modstate, State#state.botid),
 	{noreply, State#state{modstate=NewModState}};
 handle_cast(init, State) ->
 	gen_server:cast(sporkk:modserv(State#state.botid), {mod_start, State#state.module}),

@@ -6,6 +6,7 @@
 -module(mod_util).
 -author("Forkk").
 -behavior(sporkk_module).
+-include("sporkk.hrl").
 -include("modules.hrl").
 
 -export([get_info/0, init/1, handle_event/4, handle_command/6, code_change/3, terminate/1]).
@@ -39,6 +40,13 @@ get_info() ->
 		   desc = "Lists available commands.",
 		   args = []
 		  },
+		% TODO: Move this to the accounts module when it gets added.
+		#cmd_info{
+		   id = whoami,
+		   name = "whoami",
+		   desc = "Tells who you are logged in as on the bot.",
+		   args = []
+		  },
 		#cmd_info{
 		   id = help,
 		   name = "help",
@@ -67,6 +75,15 @@ handle_command(modules, Source, _User, _Args, State, BotId) ->
 handle_command(commands, Source, _User, _Args, State, BotId) ->
 	Commands = sporkk_modserv:commands(BotId),
 	sporkk:send(BotId, Source, "Available commands: " ++ string:join(lists:map(fun(C) -> C#cmd_info.name end, Commands), ", ")),
+	{ok, State};
+
+handle_command(whoami, Source, User, _Args, State, BotId) ->
+	case User#user.username of
+		none ->
+			sporkk:send(BotId, Source, "You are nobody!");
+		UserName ->
+			sporkk:send(BotId, Source, io_lib:format("You are logged in as ~s.", [UserName]))
+	end,
 	{ok, State};
 
 handle_command(help, Source, {Nick, _Acct}, Args, State, BotId) ->

@@ -19,8 +19,7 @@
 % State record
 -record(state, {
 		  botid,
-		  nick,
-		  account_map
+		  nick
 		 }).
 
 
@@ -93,7 +92,19 @@ registering({recv, {DateTime, LineData}}, State) ->
 running({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
 	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, Line} = irc_lib:parse_message(Bot, DateTime, LineData),
+	{ok, BareLine} = irc_lib:parse_message(Bot, DateTime, LineData),
+
+	% Attempt to attach account information to the line.
+	Line = case BareLine#line.sender of
+			   none ->
+				   % Line doesn't have a sender. Nothing to do.
+				   BareLine;
+			   User ->
+				   % Check with the auth server to see if the user is logged in.
+				   error_logger:info_report({checking_account_for, User}),
+				   NewUser = sporkk_authserv:get_user(State#state.botid, User),
+				   BareLine#line{sender=NewUser}
+		   end,
 
 	case Line#line.command of
 		ping ->

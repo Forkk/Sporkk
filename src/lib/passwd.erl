@@ -21,11 +21,17 @@ hash_pass(Algorithm, Pass) ->
 	hash_pass(Algorithm, Pass, crypto:rand_bytes(64)).
 
 %% @doc Salts with the given salt and hashes the password.
+hash_pass(Algorithm, Pass, Salt) when is_binary(Pass) ->
+	hash_pass(Algorithm, binary_to_list(Pass), Salt);
+hash_pass(Algorithm, Pass, Salt) when is_binary(Salt) ->
+	hash_pass(Algorithm, Pass, binary_to_list(Salt));
 hash_pass(Algorithm, Pass, Salt) ->
 	{Algorithm, Salt, crypto:hash(Algorithm, Pass ++ Salt)}.
 
 
 %% @doc Returns 'ok' if the given pass matches the given hash. Otherwise, returns 'fail'.
+check_pass(Pass, {Alg, Salt, Hash}) when is_binary(Salt) ->
+	check_pass(Pass, {Alg, binary_to_list(Salt), Hash});
 check_pass(Pass, {Alg, Salt, Hash}) ->
 	{Alg, Salt, CheckHash} = hash_pass(Alg, Pass, Salt),
 	case string:equal(Hash, CheckHash) of

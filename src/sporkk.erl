@@ -16,7 +16,7 @@
 
 -export([send/3, notice/3, log_info/2]).
 
--export([connector/1, sender/1, receiver/1, modserv/1, modsup/1]).
+-export([connector/1, sender/1, receiver/1, modserv/1, modsup/1, authserv/1]).
 
 %% @doc Starts the main application process and its dependencies.
 start() ->
@@ -104,6 +104,9 @@ modserv(Id) when is_atom(Id) ->   {global, {Id, modserv}}.
 
 %% @doc Gets the module supervisor process name for the given bot ID.
 modsup(Id) when is_atom(Id) ->   {global, {Id, modsup}}.
+
+%% @doc Gets the authentication server process name for the given bot ID.
+authserv(Id) when is_atom(Id) ->   {global, {Id, authserv}}.
 
 
 %% ============================================================================
