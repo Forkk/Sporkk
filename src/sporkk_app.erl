@@ -12,14 +12,12 @@
 
 %% Starts the application's core supervisor.
 start(_Type, _Args) ->
-	% Initialize the database if necessary.
-	sporkk_cfg:init(),
 	% Start the main supervisor.
 	case sporkk_sup:start_link() of
 		{ok, Pid} ->
 			{ok, Pid};
 		Error ->
-			Error
+			{error, Error}
 	end.
 
 %% Called to stop the application.

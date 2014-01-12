@@ -20,10 +20,7 @@
 
 %% @doc Starts the main application process and its dependencies.
 start() ->
-	ok = application:start(inets),
-	ok = application:start(sasl),
-	ok = application:start(mnesia),
-	ok = application:start(sporkk).
+	{ok, _Deps} = application:ensure_all_started(sporkk).
 
 %% @doc Starts the bot with the given ID.
 start(Id) ->
@@ -53,12 +50,10 @@ stop(Id) ->
 
 %% @doc Tells the bot with the given ID to join the given channels and adds the channels to the bot's DB entry.
 join(Id, Channels) ->
-	sporkk_cfg:add_bot_chans(Id, Channels),
 	gen_server:cast(sender(Id), {join, Channels}).
 
 %% @doc Tells the bot with the given ID to part from the given channels and removes the channels from the bot's DB entry.
 part(Id, Channels, Reason) ->
-	sporkk_cfg:remove_bot_chans(Id, Channels),
 	gen_server:cast(sender(Id), {part, Channels, Reason}).
 part(Id, Channels) ->
 	part(Id, Channels, "I was told to leave.").

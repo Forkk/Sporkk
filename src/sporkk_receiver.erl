@@ -19,7 +19,8 @@
 % State record
 -record(state, {
 		  botid,
-		  nick
+		  alt_nicks=[],
+		  nick=none
 		 }).
 
 
@@ -41,8 +42,7 @@ start_link(BotId) ->
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
 init([BotId]) ->
-	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, connecting, #state{botid=BotId, nick=Bot#bot.nick}}.
+	{ok, connecting, #state{botid=BotId}}.
 
 
 %% ----------------------------------------------------------------------------
@@ -51,10 +51,7 @@ init([BotId]) ->
 %% ----------------------------------------------------------------------------
 connecting(connected, State) ->
 	error_logger:info_msg("TCP connection success. Registering with the IRC server."),
-	BotId = State#state.botid,
-	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	ok = gen_server:cast(sporkk:sender(BotId), {register, Bot#bot.nick}),
-	{next_state, registering, State};
+	{next_state, registering, set_alt_nicks(State)};
 connecting(_Request, State) ->
 	{next_state, connecting, State}.
 
@@ -63,24 +60,19 @@ connecting(_Request, State) ->
 %% ----------------------------------------------------------------------------
 registering({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
-	{ok, Bot} = sporkk_cfg:get_bot(BotId),
+	Bot = sporkk_cfg:get_bot(BotId),
 	{ok, Line} = irc_lib:parse_message(Bot, DateTime, LineData),
 	case Line#line.command of
 		ping ->
 			ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
 			{next_state, registering, State};
 		err_nicknameinuse ->
-			% TODO: Get the nick from the database, not the local state. This may cause issues.
 			error_logger:info_msg("Nick in use. Trying another one."),
-			NewNick = Bot#bot.nick ++ "_",
-			ok = gen_server:cast(sporkk:sender(BotId), {nick, NewNick}),
-			{next_state, registering, State#state{nick=NewNick}};
+			{next_state, registering, next_alt_nick(State)};
 		reply_welcome ->
 			error_logger:info_msg("Connected to IRC. Joining channels."),
 			Channels = Bot#bot.channels,
 			ok = gen_server:cast(sporkk:sender(BotId), {join, Channels}),
-			% TODO: Send Lines to the event manager.
-			%ok = gen_server:cast(, {line, Line}),
 			{next_state, running, State};
 		_ ->
 			{next_state, registering, State}
@@ -92,7 +84,7 @@ registering({recv, {DateTime, LineData}}, State) ->
 running({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
 	BotNick = State#state.nick,
-	{ok, Bot} = sporkk_cfg:get_bot(BotId),
+	Bot = sporkk_cfg:get_bot(BotId),
 	{ok, BareLine} = irc_lib:parse_message(Bot, DateTime, LineData),
 
 	% Attempt to attach account information to the line.
@@ -184,4 +176,19 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% ============================================================================
 %% Internal Functions
 %% ============================================================================
+set_alt_nicks(State) ->
+	#bot{nicks=[Nick|AltNicks]} = sporkk_cfg:get_bot(State#state.botid),
+	error_logger:info_report(Nick),
+	ok = gen_server:cast(sporkk:sender(State#state.botid), {register, Nick}),
+	State#state{nick=Nick, alt_nicks=AltNicks}.
+
+next_alt_nick(State) ->
+	case State#state.alt_nicks of
+		[] ->
+			throw(no_nick_available);
+		[Nick|AltNicks] ->
+			NewState = State#state{nick=Nick, alt_nicks=AltNicks},
+			ok = gen_server:cast(sporkk:sender(State#state.botid), {nick, Nick}),
+			NewState
+	end.
 

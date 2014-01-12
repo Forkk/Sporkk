@@ -24,20 +24,12 @@ list_contains(List, Elements) ->
 	list_contains(List, Elements, normal).
 
 % @doc Checks if the given list contains any of the given elements.
+list_contains(List, Element, CaseMode) when not is_list(Element) ->
+	list_contains(List, [Element], CaseMode);
 list_contains(List, [Element], CaseMode) ->
-	case length(lists:filter(fun(E) -> contains_compare(E, Element, CaseMode) end, List)) of
-		0 ->
-			false;
-		_ ->
-			true
-	end;
+	lists:any(fun(E) -> contains_compare(E, Element, CaseMode) end, List);
 list_contains(List, Elements, CaseMode) ->
-	case length(lists:filter(fun(E) -> list_contains(Elements, [E], CaseMode) end, List)) of
-		0 ->
-			false;
-		_ ->
-			true
-	end.
+	lists:any(fun(E) -> list_contains(Elements, [E], CaseMode) end, List).
 
 
 % @doc Calls subtract(From, Values, normal).

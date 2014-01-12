@@ -35,10 +35,9 @@ start_link(BotId) ->
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
 init([BotId]) ->
-	{ok, Bot} = sporkk_cfg:get_bot(BotId),
-	{ok, Network} = sporkk_cfg:get_network(Bot#bot.network),
+	Bot = sporkk_cfg:get_bot(BotId),
 	error_logger:info_msg("Connecting to IRC network."),
-	{ok, Sock} = network_connect(Network),
+	Sock = connect(Bot#bot.servers),
 	% Notify the receiver that we've connected.
 	gen_fsm:send_event(sporkk:receiver(BotId), connected),
 	{ok, #state{botid=BotId, sock=Sock}}.
@@ -105,18 +104,16 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Functions
 %% ============================================================================
 
-%% @doc Attempts to connect to the given IRC network and returns {ok, Servers, Sock}.
-network_connect({_Id, Servers}) ->
-	connect(Servers).
-
 connect([]) ->
-	{error, connection_failed};
+	error_logger:error_report({connect_failed, giving_up}),
+	throw(connect_failed);
 connect([{Addr, Port} | Servers]) ->
 	error_logger:info_msg("Attempting to connect to server ~s:~p.~n", [Addr, Port]),
 	case gen_tcp:connect(Addr, Port, [{packet, line}, {active, true}]) of
 		{ok, Sock} ->
-			{ok, Sock};
+			Sock;
 		_ ->
+			error_logger:warning_report({connect_failed, trying_next}),
 			connect(Servers)
 	end.
 

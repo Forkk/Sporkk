@@ -4,15 +4,21 @@
 %% @doc Record definitions for Sporkk.
 %% ============================================================================
 
-%% @doc Record for information about an active bot.
+%% @doc Record for information about a bot.
 -record(bot, 
 		{
+		 % The bot's atom identifier.
 		 id,
-		 network,
-		 nick,
+		 % A list of nicks the bot should try.
+		 nicks,
+		 % A list of servers the bot should try to connect to.
+		 servers,
+		 % A list of channels the bot should join by default.
 		 channels,
+		 % A list of modules to load at startup.
 		 modules,
-		 extras
+		 % A list of channels to send status alerts to. For example, when a module crashes.
+		 log_chans
 		}).
 
 %% @doc Record representing a line from the IRC server.

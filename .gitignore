@@ -20,6 +20,9 @@ Session.vim
 *.sublime-workspace
 *.sublime-project
 
+# Sporkk
+*.cfg
+
 # Misc Crap
 *~
 

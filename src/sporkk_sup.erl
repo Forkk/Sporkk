@@ -39,7 +39,7 @@ start_link() ->
 %% @doc Returns information about the supervisor.
 %% ----------------------------------------------------------------------------
 init([]) ->
-	{ok, BotConfs} = sporkk_cfg:get_bots(),
+	BotConfs = sporkk_cfg:get_bots(),
 	BotProcs = lists:map(fun sporkk_sup:gen_spec/1, BotConfs),
 	{ok, {{one_for_all, 5, 60}, BotProcs}}.
 

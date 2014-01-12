@@ -4,8 +4,8 @@
 	{applications, [
 		kernel,
 		stdlib,
-		gproc,
 		sasl,
+		mnesia,
 		inets
 	]},
 	{mod, {sporkk_app, []}}

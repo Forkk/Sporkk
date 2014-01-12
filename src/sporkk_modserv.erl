@@ -82,12 +82,10 @@ handle_cast({load_mod, Mod}, State) ->
 		{ok, Pid} ->
 			{ok, NewState} = register_mod(Mod, Pid, State),
 			sporkk:log_info(State#state.botid, io_lib:format("Loaded module '~w'.~n", [Mod])),
-			sporkk_cfg:add_bot_mod(State#state.botid, Mod),
 			{noreply, NewState};
 		{ok, Pid, _Info} ->
 			{ok, NewState} = register_mod(Mod, Pid, State),
 			sporkk:log_info(State#state.botid, io_lib:format("Loaded module '~w'.~n", [Mod])),
-			sporkk_cfg:add_bot_mod(State#state.botid, Mod),
 			{noreply, NewState};
 
 		{error, {already_started, _Pid}} ->
@@ -108,7 +106,6 @@ handle_cast({unload_mod, Mod}, State) ->
 			% Stop the module's process.
 			ok = sporkk_modsup:stop_mod(State#state.botid, Mod),
 			sporkk:log_info(State#state.botid, io_lib:format("Unloaded module '~w'.~n", [Mod])),
-			sporkk_cfg:remove_bot_mod(State#state.botid, Mod),
 			{noreply, State#state{modules=NewModList}};
 		false ->
 			{noreply, State}
@@ -123,8 +120,8 @@ handle_cast({mod_start, Mod}, State) ->
 
 % Sent to self at startup. Used to load initial modules.
 handle_cast(init, State) ->
-	{ok, Bot} = sporkk_cfg:get_bot(State#state.botid),
-	lists:map(fun(Mod) -> sporkk:load_mod(State#state.botid, Mod) end, Bot#bot.modules),
+	Bot = sporkk_cfg:get_bot(State#state.botid),
+	lists:map(fun({Mod, _Groups, _Config}) -> sporkk:load_mod(State#state.botid, Mod) end, Bot#bot.modules),
 	{noreply, State};
 
 % Handle event messages.

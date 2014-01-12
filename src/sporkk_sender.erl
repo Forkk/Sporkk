@@ -82,8 +82,8 @@ handle_cast({notice, Dest, Message}, State) ->
 	{noreply, State};
 
 handle_cast({log, info, Message}, State) ->
-	{ok, LogChans} = sporkk_cfg:get_bot_extra(State#state.botid, log_chans, []),
-	{ok, Bot} = sporkk_cfg:get_bot(State#state.botid),
+	Bot = sporkk_cfg:get_bot(State#state.botid),
+	LogChans = Bot#bot.log_chans,
 	lists:map(fun(LogChan) ->
 					  ok = gen_server:cast(sporkk:connector(State#state.botid), {send_line, irc_lib:privmsg(LogChan, Message)})
 			  end, lists:filter(fun(Chan) -> lists:member(Chan, LogChans) end, Bot#bot.channels)),
