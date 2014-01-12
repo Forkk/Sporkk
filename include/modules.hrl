@@ -27,7 +27,7 @@
 %% 			desc = string() - The command's description. This should identify what the command does.
 %% 			args = [{Name, Optional}] - A list of argument tuples describing the arguments the command takes. Currently only for display purposes.
 %% 				Name = string() - The string name of the argument.
-%% 				Optional = bool() - true if arg is optional, else false.
+%% 				Optional = atom() - 'optional' if arg is optional, else 'required'.
 -record(cmd_info,
 		{
 		 id,
