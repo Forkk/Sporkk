@@ -23,7 +23,6 @@ start() ->
 	ok = application:start(inets),
 	ok = application:start(sasl),
 	ok = application:start(mnesia),
-	ok = application:start(gproc),
 	ok = application:start(sporkk).
 
 %% @doc Starts the bot with the given ID.
