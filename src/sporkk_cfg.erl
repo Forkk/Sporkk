@@ -6,6 +6,7 @@
 -module(sporkk_cfg).
 -include("db.hrl").
 -include("sporkk.hrl").
+-include("modules.hrl").
 
 -include_lib("stdlib/include/qlc.hrl").
 
@@ -163,10 +164,10 @@ get_mod_groups(BotId, Module) ->
 	{atomic, Bot} = mnesia:transaction(fun() -> [Bot] = mnesia:wread({bot_config, BotId}), Bot end),
 	case lists:keyfind(Module, 1, Bot#bot_config.modgrps) of
 		false ->
-			% Default to 'all', a special group that everyone belongs to.
-			[all];
+			% Default to the module's default group.
+			(Module:get_info())#mod_info.default_groups;
 		{Module, []} ->
-			[all];
+			(Module:get_info())#mod_info.default_groups;
 		{Module, Groups} ->
 			Groups
 	end.
@@ -214,7 +215,7 @@ create_user(Name, Pass) ->
 
 %% @doc Adds a user to the database.
 add_user(Name, PassHash) ->
-	User = #usr_config{name=Name, pass=PassHash, groups=sets:new()},
+	User = #usr_config{name=Name, pass=PassHash},
 	case mnesia:transaction(fun() ->
 									case mnesia:wread({usr_config, Name}) of
 										[] ->
@@ -273,13 +274,13 @@ get_user(BotId, Name, User) ->
 		{atomic, {Bot, UserCfg}} ->
 			% Get the user's groups for this bot.
 			BotGroups = case lists:keyfind(Name, 1, Bot#bot_config.usergrps) of
-							false -> sets:new();
-							BotGrps -> BotGrps 
+							false -> [];
+							{Name, BotGrps} -> BotGrps 
 						end,
 			% Merge the user's bot group list with the user's global group list, set the username, and return.
 			{ok, User#user{
 				   username=Name,
-				   groups=sets:to_list(sets:union(UserCfg#usr_config.groups, BotGroups))
+				   groups=sets:to_list(sets:union(sets:from_list(UserCfg#usr_config.groups), sets:from_list(BotGroups)))
 				  }};
 		{atomic, Error} ->
 			{error, Error}

@@ -150,7 +150,6 @@ handle_cast({command, Dest, Sender, CmdMsg}, State) ->
 			case util:list_contains(lists:append(Sender#user.groups, [all]), ModGroups) of
 				true ->
 					% Send the command message to the module.
-					error_logger:info_report({run_command}),
 					gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Dest, Sender, Args}),
 					{noreply, State};
 				false ->

@@ -17,6 +17,7 @@
 		 desc,
 		 short_desc,
 		 version,
+		 default_groups=[all],
 		 commands
 		}).
 

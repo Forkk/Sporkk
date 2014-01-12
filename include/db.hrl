@@ -41,7 +41,7 @@
 		  pass,
 		  % The user's global groups - groups the user is in for every bot.
 		  % Primarily used for "owners" of the bot.
-		  groups=sets:new(),
+		  groups=[],
 		  % Extra information.
 		  extras=[]
 		 }).
