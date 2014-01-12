@@ -144,9 +144,20 @@ handle_cast({command, Dest, Sender, CmdMsg}, State) ->
 	% Find a matching command.
 	case find_cmd(CommandName, State) of
 		{ok, Command, {Mod, _Mon}} ->
-			% Send the command message to the module.
-			gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Dest, Sender, Args}),
-			{noreply, State};
+			% Check permissions. We need to get the module groups list from the database.
+			ModGroups = sporkk_cfg:get_mod_groups(State#state.botid, Mod),
+
+			case util:list_contains(lists:append(Sender#user.groups, [all]), ModGroups) of
+				true ->
+					% Send the command message to the module.
+					error_logger:info_report({run_command}),
+					gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Dest, Sender, Args}),
+					{noreply, State};
+				false ->
+					% Tell the user they can't do that.
+					sporkk:send(State#state.botid, Dest, "You are not allowed to use that command!"),
+					{noreply, State}
+			end;
 
 		not_found ->
 			% TODO: Add "creative" command not found messages.

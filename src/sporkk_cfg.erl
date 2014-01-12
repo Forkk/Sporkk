@@ -16,7 +16,8 @@
 		 add_bot/4, remove_bot/1, get_bots/0, get_bot/1,
 		 get_bot_extra/2, get_bot_extra/3, set_bot_extra/3,
 		 add_bot_chans/2, remove_bot_chans/2,
-		 add_bot_mod/2, remove_bot_mod/2
+		 add_bot_mod/2, remove_bot_mod/2,
+		 add_mod_group/3, remove_mod_group/3, get_mod_groups/2
 		]).
 
 -export([
@@ -119,6 +120,57 @@ remove_bot_mod(BotId, Module) ->
 							 mnesia:write(bot_config, Bot#bot_config{modules=NewMods}, write)
 					 end),
 	ok.
+
+
+%% @doc Adds the given group to the given module, allowing people in that group to run the module's commands.
+add_mod_group(BotId, Group, Module) ->
+	change_mod_groups(add, BotId, Group, Module).
+
+%% @doc Removes the given group from the given module. If all groups are removed, everyone can use the module.
+remove_mod_group(BotId, Group, Module) ->
+	change_mod_groups(del, BotId, Group, Module).
+
+change_mod_groups(Type, BotId, Group, Module) ->
+	case
+		mnesia:transaction(
+		  fun() ->
+				  [Bot] = mnesia:wread({bot_config, BotId}),
+				  OldList = case lists:keyfind(Module, 1, Bot#bot_config.modgrps) of
+							   {Module, Groups} -> 
+								   Groups;
+							   false ->
+								   []
+						   end,
+				  NewEntry = case Type of
+								 add ->
+									 {Module, lists:append(OldList, [Group])};
+								 del ->
+									 {Module, lists:filter(fun(E) -> E =/= Group end, OldList)}
+							 end,
+				  NewModGrps = lists:keystore(Module, 1, Bot#bot_config.modgrps, NewEntry),
+				  error_logger:info_report(Bot),
+				  mnesia:write(Bot#bot_config{modgrps=NewModGrps})
+		  end)
+	of
+		{atomic, ok} ->
+			ok;
+		{atomic, Error} ->
+			{error, Error}
+	end.
+
+%% @doc Gets a list of groups the given mod belongs to on the given bot.
+get_mod_groups(BotId, Module) ->
+	{atomic, Bot} = mnesia:transaction(fun() -> [Bot] = mnesia:wread({bot_config, BotId}), Bot end),
+	case lists:keyfind(Module, 1, Bot#bot_config.modgrps) of
+		false ->
+			% Default to 'all', a special group that everyone belongs to.
+			[all];
+		{Module, []} ->
+			[all];
+		{Module, Groups} ->
+			Groups
+	end.
+
 
 %% @doc Gets the extra config option with the given key from the given bot ID's configuration.
 get_bot_extra(BotId, Key) ->
@@ -227,7 +279,7 @@ get_user(BotId, Name, User) ->
 			% Merge the user's bot group list with the user's global group list, set the username, and return.
 			{ok, User#user{
 				   username=Name,
-				   groups=sets:union(UserCfg#usr_config.groups, BotGroups)
+				   groups=sets:to_list(sets:union(UserCfg#usr_config.groups, BotGroups))
 				  }};
 		{atomic, Error} ->
 			{error, Error}
@@ -235,34 +287,34 @@ get_user(BotId, Name, User) ->
 
 
 %% @doc Adds the user with the given username to the given group ID on the given bot.
-add_user_group(BotId, UserName, GroupId) ->
-	mod_user_group(add, BotId, UserName, GroupId).
+add_user_group(BotId, UserName, Group) ->
+	mod_user_group(add, BotId, UserName, Group).
 
 %% @doc Removes the user with the given username from the given group ID on the given bot.
-remove_user_group(BotId, UserName, GroupId) ->
-	mod_user_group(del, BotId, UserName, GroupId).
+remove_user_group(BotId, UserName, Group) ->
+	mod_user_group(del, BotId, UserName, Group).
 
-mod_user_group(Type, BotId, UserName, GroupId) ->
+mod_user_group(Type, BotId, UserName, Group) ->
 	case
 		mnesia:transaction(
 		  fun() ->
 				  [Bot] = mnesia:wread({bot_config, BotId}),
 				  case mnesia:wread({usr_config, UserName}) of
 					  [_User] ->
-						  OldSet = case lists:keyfind(UserName, 1, Bot#bot_config.usergrps) of
+						  OldList = case lists:keyfind(UserName, 1, Bot#bot_config.usergrps) of
 									   {UserName, Groups} -> 
 										   Groups;
 									   false ->
-										   sets:new()
+										   []
 								   end,
 						  NewEntry = case Type of
 										 add ->
-											 sets:add_element(GroupId, OldSet);
+											 {UserName, lists:append(OldList, [Group])};
 										 del ->
-											 sets:del_element(GroupId, OldSet)
+											 {UserName, lists:filter(fun(E) -> E =/= Group end, OldList)}
 									 end,
 						  NewUserGrps = lists:keystore(UserName, 1, Bot#bot_config.usergrps, NewEntry),
-						  mnesia:write(bot_config, Bot#bot_config{usergrps=NewUserGrps});
+						  mnesia:write(Bot#bot_config{usergrps=NewUserGrps});
 					  [] ->
 						  no_user
 				  end
