@@ -147,7 +147,7 @@ handle_cast({command, Dest, Sender, CmdMsg}, State) ->
 			% Check permissions. We need to get the module groups list from the database.
 			ModGroups = sporkk_cfg:get_mod_groups(State#state.botid, Mod),
 
-			case util:list_contains(lists:append(Sender#user.groups, [all]), ModGroups) of
+			case listutil:list_contains(lists:append(Sender#user.groups, [all]), ModGroups) of
 				true ->
 					% Send the command message to the module.
 					gen_server:cast(mod_proc(State#state.botid, Mod), {command, Command#cmd_info.id, Dest, Sender, Args}),

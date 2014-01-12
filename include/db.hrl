@@ -13,9 +13,9 @@
 		  % The bot's nick.
 		  nick,
 		  % Set of strings representing the channels this bot will connect to.
-		  channels=sets:new(),
+		  channels=[],
 		  % Set of atoms representing the modules the bot should load on startup.
-		  modules=sets:new(),
+		  modules=[],
 		  % List of {User, GroupId} tuples, mapping users' nickserv accounts to their user group for this bot.
 		  usergrps=[],
 		  % List of {Module, [GroupId|_]} or {module, all} tuples for specifying which users can use which modules.

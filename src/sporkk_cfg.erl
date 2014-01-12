@@ -44,13 +44,12 @@ init() ->
 	ok = mnesia:wait_for_tables([bot_config, net_config, usr_config], 5000),
 	ok.
 
-
 %%%%%% Bots %%%%%%
 
 %% @doc Adds a bot to the config. This is called by the bot manager's add_bot handler to add bots to the database.
 %% @spec add_bot(Id, Nick, NetworkId, Channels) -> {ok, Bot#bot{}}
 add_bot(Id, Nick, NetworkId, Channels) ->
-	BotConf = #bot_config{id=Id, nick=Nick, network=NetworkId, channels=sets:from_list(Channels), enabled=true},
+	BotConf = #bot_config{id=Id, nick=Nick, network=NetworkId, channels=Channels, enabled=true},
 	{atomic, ok} = mnesia:transaction(fun() -> mnesia:write(BotConf) end),
 	{ok, bot_from_config(BotConf)}.
 
@@ -82,7 +81,7 @@ add_bot_chans(BotId, Channels) ->
 					 fun() ->
 							 [Bot] = mnesia:wread({bot_config, BotId}),
 							 % Combine the channels set with the Channels list.
-							 NewChans = sets:union(Bot#bot_config.channels, sets:from_list(Channels)),
+							 NewChans = listutil:remove_duplicates(lists:append(Bot#bot_config.channels, Channels), ignore_case),
 							 mnesia:write(bot_config, Bot#bot_config{channels=NewChans}, write)
 					 end),
 	ok.
@@ -95,7 +94,7 @@ remove_bot_chans(BotId, Channels) ->
 					 fun() ->
 							 [Bot] = mnesia:wread({bot_config, BotId}),
 							 % Remove everything in the Channels list from the channels set.
-							 NewChans = sets:subtract(Bot#bot_config.channels, sets:from_list(Channels)),
+							 NewChans = listutil:subtract(Bot#bot_config.channels, Channels),
 							 mnesia:write(bot_config, Bot#bot_config{channels=NewChans}, write)
 					 end),
 	ok.
@@ -106,7 +105,7 @@ add_bot_mod(BotId, Module) ->
 	{atomic, ok} = mnesia:transaction(
 					 fun() ->
 							 [Bot] = mnesia:wread({bot_config, BotId}),
-							 NewMods = sets:add_element(Module, Bot#bot_config.modules),
+							 NewMods = listutil:remove_duplicates(lists:append(Bot#bot_config.modules, [Module])),
 							 mnesia:write(bot_config, Bot#bot_config{modules=NewMods}, write)
 					 end),
 	ok.
@@ -117,7 +116,7 @@ remove_bot_mod(BotId, Module) ->
 	{atomic, ok} = mnesia:transaction(
 					 fun() ->
 							 [Bot] = mnesia:wread({bot_config, BotId}),
-							 NewMods = sets:del_element(Module, Bot#bot_config.modules),
+							 NewMods = listutil:subtract(Bot#bot_config.modules, [Module]),
 							 mnesia:write(bot_config, Bot#bot_config{modules=NewMods}, write)
 					 end),
 	ok.
@@ -280,7 +279,7 @@ get_user(BotId, Name, User) ->
 			% Merge the user's bot group list with the user's global group list, set the username, and return.
 			{ok, User#user{
 				   username=Name,
-				   groups=sets:to_list(sets:union(sets:from_list(UserCfg#usr_config.groups), sets:from_list(BotGroups)))
+				   groups=listutil:remove_duplicates(lists:append(UserCfg#usr_config.groups, BotGroups))
 				  }};
 		{atomic, Error} ->
 			{error, Error}
@@ -357,8 +356,8 @@ bot_from_config(BotConf) ->
 	   id=BotConf#bot_config.id,
 	   network=BotConf#bot_config.network,
 	   nick=BotConf#bot_config.nick,
-	   channels=sets:to_list(BotConf#bot_config.channels),
-	   modules=sets:to_list(BotConf#bot_config.modules),
+	   channels=BotConf#bot_config.channels,
+	   modules=BotConf#bot_config.modules,
 	   extras=BotConf#bot_config.extra
 	  }.
 
