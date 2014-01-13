@@ -24,7 +24,7 @@ start() ->
 
 %% @doc Starts the bot with the given ID.
 start(Id) ->
-	{ok, Bot} = sporkk_cfg:get_bot(Id),
+	Bot = sporkk_cfg:get_bot(Id),
 	case supervisor:start_child({global, sporkk_sup}, sporkk_sup:gen_spec(Bot)) of
 		{ok, _Child} ->
 			ok;
