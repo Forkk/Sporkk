@@ -16,16 +16,15 @@
 
 -export([send/3, notice/3, log_info/2]).
 
--export([connector/1, sender/1, receiver/1, modserv/1, modsup/1, authserv/1]).
+-export([core/1, connector/1, sender/1, receiver/1, modserv/1, modsup/1, authserv/1]).
 
 %% @doc Starts the main application process and its dependencies.
 start() ->
 	{ok, _Deps} = application:ensure_all_started(sporkk).
 
 %% @doc Starts the bot with the given ID.
-start(Id) ->
-	Bot = sporkk_cfg:get_bot(Id),
-	case supervisor:start_child({global, sporkk_sup}, sporkk_sup:gen_spec(Bot)) of
+start(BotId) ->
+	case supervisor:start_child({global, sporkk_sup}, sporkk_sup:gen_spec(BotId)) of
 		{ok, _Child} ->
 			ok;
 		{ok, _Child, _Info} ->
@@ -84,6 +83,10 @@ log_info(Id, Message) ->
 %% ============================================================================
 %% Some hacky functions for finding process names of a bot's components.
 %% ============================================================================
+
+%% @doc Gets the core process name for the given bot ID.
+core(Id) when is_atom(Id) ->       {global, {Id, core}}.
+
 %% @doc Gets the connector process name for the given bot ID.
 connector(Id) when is_atom(Id) ->  {global, {Id, connector}}.
 
@@ -94,10 +97,10 @@ sender(Id) when is_atom(Id) ->     {global, {Id, sender}}.
 receiver(Id) when is_atom(Id) ->   {global, {Id, receiver}}.
 
 %% @doc Gets the module server process name for the given bot ID.
-modserv(Id) when is_atom(Id) ->   {global, {Id, modserv}}.
+modserv(Id) when is_atom(Id) ->    {global, {Id, modserv}}.
 
 %% @doc Gets the module supervisor process name for the given bot ID.
-modsup(Id) when is_atom(Id) ->   {global, {Id, modsup}}.
+modsup(Id) when is_atom(Id) ->     {global, {Id, modsup}}.
 
 %% @doc Gets the authentication server process name for the given bot ID.
 authserv(Id) when is_atom(Id) ->   {global, {Id, authserv}}.

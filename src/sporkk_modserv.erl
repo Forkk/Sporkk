@@ -120,8 +120,7 @@ handle_cast({mod_start, Mod}, State) ->
 
 % Sent to self at startup. Used to load initial modules.
 handle_cast(init, State) ->
-	Bot = sporkk_cfg:get_bot(State#state.botid),
-	lists:map(fun({Mod, _Groups, _Config}) -> sporkk:load_mod(State#state.botid, Mod) end, Bot#bot.modules),
+	lists:map(fun({Mod, _Groups, _Config}) -> sporkk:load_mod(State#state.botid, Mod) end, sporkk_core:get_val(State#state.botid, modules)),
 	{noreply, State};
 
 % Handle event messages.
@@ -142,7 +141,7 @@ handle_cast({command, Dest, Sender, CmdMsg}, State) ->
 	case find_cmd(CommandName, State) of
 		{ok, Command, {Mod, _Mon}} ->
 			% Check permissions. We need to get the module groups list from the database.
-			ModGroups = sporkk_cfg:get_mod_groups(State#state.botid, Mod),
+			ModGroups = sporkk_core:get_mod_groups(State#state.botid, Mod),
 
 			case listutil:list_contains(lists:append(Sender#user.groups, [all]), ModGroups) of
 				true ->

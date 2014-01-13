@@ -15,11 +15,7 @@
 		 get_config_section/1, get_config_section/2
 		]).
 
--export([
-		 get_bots/0, get_bot/1,
-		 get_bot_option/2, get_bot_option/3,
-		 get_mod_groups/2
-		]).
+-export([get_bot_entries/0, get_bot_entry/1]).
 
 -export([
 		 get_user/3,
@@ -62,48 +58,6 @@ get_bot_entry(Id) ->
 			throw(no_bot);
 		Bot ->
 			Bot
-	end.
-
-%% @doc Gets a list of bots from Sporkk's config file.
-%% @spec get_bots() ->  {ok, Bots} | {error, Error}
-get_bots() ->
-	lists:map(fun(C) -> bot_from_config(C) end, get_bot_entries()).
-
-%% @doc Gets the bot with the given ID.
-get_bot(Id) ->
-	bot_from_config(get_bot_entry(Id)).
-
-% @doc Gets the option with the given key from the given bot configuration.
-%      If the key cannot be found, returns Default.
-get_bot_option(Bot, Key, Default) ->
-	try get_bot_option(Bot, Key) of
-		Value -> Value
-	catch
-		no_value ->
-			Default
-	end.
-
-% @doc Gets the option with the given key from the given bot configuration.
-%      If the key cannot be found, throws 'no_value'.
-get_bot_option(BotId, Key) when is_atom(BotId) ->
-	BotConf = get_bot_entry(BotId),
-	get_bot_option(BotConf, Key);
-get_bot_option({_Id, _Nicks, Options}, Key) ->
-	case lists:keyfind(Key, 1, Options) of
-		false ->
-			throw(no_value);
-		{Key, Value} ->
-			Value
-	end.
-
-
-%% @doc Gets a list of groups the given mod belongs to on the given bot.
-get_mod_groups(BotId, Module) ->
-	case lists:keyfind(Module, 1, get_bot_option(BotId, modules, [])) of
-		false ->
-			[all];
-		{Module, Groups, _Config} ->
-			Groups
 	end.
 
 
@@ -155,22 +109,20 @@ remove_user(Name) ->
 
 %% @doc Fills out the given 'user' record with the given username's account info.
 %% Returns {ok, User}, where User is a 'user' record, if successful.
-get_user(Bot, Name, User) when is_atom(Bot) ->
-	get_user(get_bot_entry(Bot), Name, User);
-get_user(Bot, Name, User) ->
+get_user(BotId, Name, User) ->
 	case mnesia:transaction(
 		   fun() ->
 				   case mnesia:read({usr_config, Name}) of
 					   [UsrCfg] ->
-						   {Bot, UsrCfg};
+						   {ok, UsrCfg};
 					   [] ->
 						   no_user
 				   end
 		   end)
 	of
-		{atomic, {Bot, UserCfg}} ->
+		{atomic, {ok, UserCfg}} ->
 			% Get the user's groups for this bot.
-			BotGroups = case lists:keyfind(Name, 1, get_bot_option(Bot, user_groups, [])) of
+			BotGroups = case lists:keyfind(Name, 1, sporkk_core:get_val(BotId, user_groups, [])) of
 							false -> [];
 							{Name, BotGrps} -> BotGrps
 						end,
@@ -187,14 +139,4 @@ get_user(Bot, Name, User) ->
 %% ============================================================================
 %% Internal Functions
 %% ============================================================================
-bot_from_config(Bot) ->
-	{BotId, BotNicks, _Options} = Bot,
-	#bot{
-	   id=BotId,
-	   nicks=BotNicks,
-	   servers=get_bot_option(Bot, servers),
-	   channels=get_bot_option(Bot, channels, []),
-	   modules=get_bot_option(Bot, modules),
-	   log_chans=get_bot_option(Bot, log_chans, [])
-	  }.
 

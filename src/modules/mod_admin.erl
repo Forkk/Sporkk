@@ -24,6 +24,12 @@ get_info() ->
 	   commands =
 	   [
 		#cmd_info{
+		   id = reconf,
+		   name = "reconf",
+		   desc = "Reloads the bot's configuration file.",
+		   args = []
+		  },
+		#cmd_info{
 		   id = join,
 		   name = "join",
 		   desc = "Makes the bot join a given channel.",
@@ -56,6 +62,10 @@ init(_BotId) ->
 
 handle_event(_Type, _Data, State, _BotId) ->
 	{ok, State}.
+
+handle_command(reconf, _Dest, _User, [], State, BotId) ->
+	gen_server:cast(sporkk:core(BotId), reload_config),
+	{ok, State};
 
 handle_command(join, _Dest, _User, [Chan], State, BotId) ->
 	sporkk:join(BotId, [Chan]),

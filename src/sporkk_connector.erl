@@ -35,9 +35,9 @@ start_link(BotId) ->
 %% @doc Initializes the server's state.
 %% ----------------------------------------------------------------------------
 init([BotId]) ->
-	Bot = sporkk_cfg:get_bot(BotId),
+	Servers = sporkk_core:get_val(BotId, servers),
 	error_logger:info_msg("Connecting to IRC network."),
-	Sock = connect(Bot#bot.servers),
+	Sock = connect(Servers),
 	% Notify the receiver that we've connected.
 	gen_fsm:send_event(sporkk:receiver(BotId), connected),
 	{ok, #state{botid=BotId, sock=Sock}}.
@@ -79,8 +79,9 @@ handle_info({tcp, Sock, Data}, State) ->
 	{noreply, State#state{sock=Sock}};
 
 handle_info({tcp_closed, _Sock}, State) ->
-	% TODO: Handle the TCP connection closing.
 	error_logger:info_msg("TCP connection closed."),
+	% If our connection closes, crash.
+	throw(connection_closed),
 	{noreply, State};
 
 handle_info(_Request, State) ->

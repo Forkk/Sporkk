@@ -38,13 +38,21 @@ start_link(Bot) ->
 %%                     {error, Reason}
 %% @doc Returns information about the supervisor.
 %% ----------------------------------------------------------------------------
-init([Bot]) ->
+init([BotId]) ->
 	{ok,
 	 {{one_for_all, 5, 60},
 	  [
+	   % The core process. This is responsible for keeping track of state and config information.
+	   {sporkk_core,
+		{sporkk_core, start_link, [BotId]},
+		permanent,
+		5000,
+		worker,
+		[sporkk_core]
+	   },
 	   % The sender process. This is responsible for sending messages to the IRC server.
 	   {sporkk_sender,
-		{sporkk_sender, start_link, [Bot#bot.id]},
+		{sporkk_sender, start_link, [BotId]},
 		permanent,
 		5000,
 		worker,
@@ -52,7 +60,7 @@ init([Bot]) ->
 	   },
 	   % The receiver process. This processes data from the connector into line records and hands them to the router.
 	   {sporkk_receiver,
-		{sporkk_receiver, start_link, [Bot#bot.id]},
+		{sporkk_receiver, start_link, [BotId]},
 		permanent,
 		5000,
 		worker,
@@ -60,7 +68,7 @@ init([Bot]) ->
 	   },
 	   % The connector process. This manages the bot's connection to the IRC server.
 	   {sporkk_connector,
-		{sporkk_connector, start_link, [Bot#bot.id]},
+		{sporkk_connector, start_link, [BotId]},
 		permanent,
 		5000,
 		worker,
@@ -68,7 +76,7 @@ init([Bot]) ->
 	   },
 	   % The supervisor for individual module processes.
 	   {sporkk_modsup,
-		{sporkk_modsup, start_link, [Bot#bot.id]},
+		{sporkk_modsup, start_link, [BotId]},
 		permanent,
 		5000,
 		worker,
@@ -76,7 +84,7 @@ init([Bot]) ->
 	   },
 	   % The module server. This manages loading and interacting with the bot's modules.
 	   {sporkk_modserv,
-		{sporkk_modserv, start_link, [Bot#bot.id]},
+		{sporkk_modserv, start_link, [BotId]},
 		permanent,
 		5000,
 		supervisor,
@@ -84,7 +92,7 @@ init([Bot]) ->
 	   },
 	   % The authentication server for managing user sessions and tracking who's logged in as who.
 	   {sporkk_authserv,
-		{sporkk_authserv, start_link, [Bot#bot.id]},
+		{sporkk_authserv, start_link, [BotId]},
 		permanent,
 		5000,
 		worker,

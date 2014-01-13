@@ -39,17 +39,17 @@ start_link() ->
 %% @doc Returns information about the supervisor.
 %% ----------------------------------------------------------------------------
 init([]) ->
-	BotConfs = sporkk_cfg:get_bots(),
-	BotProcs = lists:map(fun sporkk_sup:gen_spec/1, BotConfs),
-	{ok, {{one_for_all, 5, 60}, BotProcs}}.
+	{ok, {{one_for_all, 5, 60}, []}}.
 
 %% ----------------------------------------------------------------------------
 %% @spec gen_spec(Bot) -> ChildSpec
 %% @doc Returns a ChildSpec tuple for the given #bot record.
 %% ----------------------------------------------------------------------------
-gen_spec(Bot) ->
-	{Bot#bot.id,
-	 {sporkk_bot_sup, start_link, [Bot]},
+gen_spec(BotId) ->
+	% Ensure the bot ID exists to prevent starting nonexistant bots.
+	sporkk_cfg:get_bot_entry(BotId),
+	{BotId,
+	 {sporkk_bot_sup, start_link, [BotId]},
 	 permanent,
 	 8000,
 	 supervisor,

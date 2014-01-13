@@ -60,8 +60,7 @@ connecting(_Request, State) ->
 %% ----------------------------------------------------------------------------
 registering({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
-	Bot = sporkk_cfg:get_bot(BotId),
-	{ok, Line} = irc_lib:parse_message(Bot, DateTime, LineData),
+	{ok, Line} = irc_lib:parse_message(State#state.botid, DateTime, LineData),
 	case Line#line.command of
 		ping ->
 			ok = gen_server:cast(sporkk:sender(BotId), {pong, Line#line.body}),
@@ -71,7 +70,7 @@ registering({recv, {DateTime, LineData}}, State) ->
 			{next_state, registering, next_alt_nick(State)};
 		reply_welcome ->
 			error_logger:info_msg("Connected to IRC. Joining channels."),
-			Channels = Bot#bot.channels,
+			Channels = sporkk_core:get_val(State#state.botid, channels),
 			ok = gen_server:cast(sporkk:sender(BotId), {join, Channels}),
 			{next_state, running, State};
 		_ ->
@@ -84,8 +83,7 @@ registering({recv, {DateTime, LineData}}, State) ->
 running({recv, {DateTime, LineData}}, State) ->
 	BotId = State#state.botid,
 	BotNick = State#state.nick,
-	Bot = sporkk_cfg:get_bot(BotId),
-	{ok, BareLine} = irc_lib:parse_message(Bot, DateTime, LineData),
+	{ok, BareLine} = irc_lib:parse_message(State#state.botid, DateTime, LineData),
 
 	% Attempt to attach account information to the line.
 	Line = case BareLine#line.sender of
@@ -177,8 +175,8 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% Internal Functions
 %% ============================================================================
 set_alt_nicks(State) ->
-	#bot{nicks=[Nick|AltNicks]} = sporkk_cfg:get_bot(State#state.botid),
-	error_logger:info_report(Nick),
+	[Nick|AltNicks] = sporkk_core:get_val(State#state.botid, nicks),
+	error_logger:info_report({try_nick, Nick}),
 	ok = gen_server:cast(sporkk:sender(State#state.botid), {register, Nick}),
 	State#state{nick=Nick, alt_nicks=AltNicks}.
 
@@ -188,6 +186,7 @@ next_alt_nick(State) ->
 			throw(no_nick_available);
 		[Nick|AltNicks] ->
 			NewState = State#state{nick=Nick, alt_nicks=AltNicks},
+			error_logger:info_report({try_next_nick, Nick}),
 			ok = gen_server:cast(sporkk:sender(State#state.botid), {nick, Nick}),
 			NewState
 	end.
