@@ -7,7 +7,7 @@
 -behavior(gen_server).
 -include("modules.hrl").
 
--export([start_link/2]).
+-export([start_link/2, procname/2]).
 
 -export([behaviour_info/1]).
 
@@ -67,6 +67,8 @@ behaviour_info(callbacks) ->
 	 %
 	 {handle_command, 6},
 
+	 {handle_call, 3},
+
 	 % code_change(OldVsn, State, Extra) -> {ok, NewState}
 	 % Called when this module's code changes. See OTP gen_event documentation for more info.
 	 {code_change, 3},
@@ -83,7 +85,10 @@ behaviour_info(callbacks) ->
 
 %% @doc Registers the given module module with the given bot ID.
 start_link(BotId, Module) ->
-	gen_server:start_link({global, {BotId, module, Module}}, ?MODULE, [BotId, Module], []).
+	gen_server:start_link(procname(BotId, Module), ?MODULE, [BotId, Module], []).
+
+%% @doc Gets the process name for the given module on the given bot ID.
+procname(BotId, Module) -> {global, {BotId, module, Module}}.
 
 %% ============================================================================
 %% Internal Functions - gen_event callbacks.
@@ -127,8 +132,12 @@ terminate(_Arg, State) ->
 
 %% @doc Get module info.
 handle_call(Message, From, State) ->
-	error_logger:warning_msg("Unknown call: ~p from ~p~n", [Message, From]),
-	{noreply, State}.
+	case (State#state.module):handle_call(Message, From, State#state.modstate) of
+		{noreply, NewModState} ->
+			{noreply, State#state{modstate=NewModState}};
+		{reply, Reply, NewModState} ->
+			{reply, Reply, State#state{modstate=NewModState}}
+	end.
 
 
 % Ignore these...

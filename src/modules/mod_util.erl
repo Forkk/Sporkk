@@ -9,7 +9,7 @@
 -include("sporkk.hrl").
 -include("modules.hrl").
 
--export([get_info/0, init/1, handle_event/4, handle_command/6, code_change/3, terminate/1]).
+-export([get_info/0, init/1, handle_event/4, handle_command/6, handle_call/3, code_change/3, terminate/1]).
 
 -record(state, {}).
 
@@ -92,6 +92,10 @@ handle_command(help, Dest, {Nick, _Acct}, Args, State, BotId) ->
 
 handle_command(_Cmd, _Dest, _User, _Args, State, _BotId) ->
 	{ok, State}.
+
+
+handle_call(_Message, _From, State) ->
+	{noreply, State}.
 
 
 code_change(_OldVsn, State, _Extra) ->
